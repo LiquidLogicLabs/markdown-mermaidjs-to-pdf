@@ -1,6 +1,6 @@
 # Test Document for CI/CD Pipeline
 
-This is a test document used by the GitHub Actions CI/CD pipeline to verify that the markdown-to-pdf converter works correctly.
+This is a test document used by the GitHub Actions CI/CD pipeline to verify that the markdown-mermaidjs-to-pdf converter works correctly.
 
 ## Features to Test
 

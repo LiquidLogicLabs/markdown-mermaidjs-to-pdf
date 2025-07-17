@@ -1,6 +1,6 @@
 # Sample Markdown Document
 
-This is a sample markdown document that demonstrates the conversion capabilities of our markdown-to-pdf converter.
+This is a sample markdown document that demonstrates the conversion capabilities of our markdown-mermaidjs-to-pdf converter.
 
 ## Features
 
@@ -64,4 +64,4 @@ function convertMarkdown(input, output) {
 
 ## Conclusion
 
-This sample demonstrates the basic functionality of the markdown-to-pdf converter. The Mermaid diagram above should be properly rendered in the final PDF output. 
+This sample demonstrates the basic functionality of the markdown-mermaidjs-to-pdf converter. The Mermaid diagram above should be properly rendered in the final PDF output. 

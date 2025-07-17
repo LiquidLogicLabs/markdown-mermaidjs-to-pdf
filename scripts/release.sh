@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Release script for markdown-to-pdf converter
+# Release script for markdown-mermaidjs-to-pdf converter
 set -e
 
 # Colors for output

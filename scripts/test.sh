@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Test script for markdown-to-pdf converter
+# Test script for markdown-mermaidjs-to-pdf converter
 set -e
 
 # Colors for output
@@ -16,7 +16,7 @@ SAMPLES_DIR="data/input"
 OUTPUT_DIR="data/output"
 LOG_DIR="data/logs"
 
-echo -e "${BLUE}Running markdown-to-pdf converter tests...${NC}"
+echo -e "${BLUE}Running markdown-mermaidjs-to-pdf converter tests...${NC}"
 
 # Get absolute paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

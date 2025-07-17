@@ -15,7 +15,9 @@ The CI/CD pipeline includes:
 
 You need to configure the following secrets in your GitHub repository:
 
-### 1. Docker Hub Secrets
+### 1. Docker Hub Secrets (Optional)
+
+**Note**: These secrets are only required if you enable Docker Hub publishing by setting `PUBLISH_TO_DOCKERHUB=true`.
 
 Go to [Docker Hub](https://hub.docker.com/) and create an access token:
 
@@ -34,6 +36,23 @@ Then add these secrets to your GitHub repository:
 GitHub Container Registry is automatically available for GitHub repositories. No additional setup is required as it uses the built-in `GITHUB_TOKEN`.
 
 **Note**: The `GITHUB_TOKEN` is automatically provided by GitHub Actions and has the necessary permissions to push to GHCR.
+
+### 3. Publishing Configuration
+
+#### Docker Hub Publishing (Optional)
+
+By default, Docker Hub publishing is **disabled**. To enable it:
+
+1. Go to your GitHub repository
+2. Click on "Settings" → "Secrets and variables" → "Actions"
+3. Click on the "Variables" tab
+4. Click "New repository variable"
+5. Set:
+   - **Name**: `PUBLISH_TO_DOCKERHUB`
+   - **Value**: `true`
+6. Click "Add variable"
+
+**Note**: When `PUBLISH_TO_DOCKERHUB` is set to `true`, you must also configure the Docker Hub secrets (`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`).
 
 ## Setting Up GitHub Secrets
 

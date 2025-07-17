@@ -100,14 +100,14 @@ Options:
 ### Building the Image
 
 ```bash
-docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-to-pdf:latest .
+docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
 ```
 
 ### Running with Docker
 
 ```bash
 # Basic usage
-docker run --rm -v $(pwd):/workspace liquidlogiclabs/markdown-to-pdf:latest \
+docker run --rm -v $(pwd):/workspace liquidlogiclabs/markdown-mermaidjs-to-pdf:latest \
   node src/root/app/index.js -i /workspace/document.md -o /workspace/output.pdf
 
 # With custom environment variables
@@ -115,7 +115,7 @@ docker run --rm \
   -v $(pwd):/workspace \
   -e LOG_LEVEL=debug \
   -e LOGGING_ENABLED=true \
-  liquidlogiclabs/markdown-to-pdf:latest \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest \
   node src/root/app/index.js -i /workspace/document.md -o /workspace/output.pdf
 ```
 

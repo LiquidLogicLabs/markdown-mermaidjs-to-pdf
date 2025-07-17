@@ -24,7 +24,7 @@ async function main() {
   const startTime = Date.now();
 
   program
-    .name('markdown-to-pdf')
+    .name('markdown-mermaidjs-to-pdf')
     .description('Convert markdown files with Mermaid diagrams to PDF')
     .version('1.0.0')
     .option('-i, --input <dir>', 'Input directory path (default: /data/input)')

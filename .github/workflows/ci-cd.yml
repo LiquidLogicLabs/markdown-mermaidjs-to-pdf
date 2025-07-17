@@ -11,6 +11,7 @@ env:
   REGISTRY_DOCKERHUB: docker.io
   REGISTRY_GHCR: ghcr.io
   IMAGE_NAME: liquidlogiclabs/markdown-mermaidjs-to-pdf
+  PUBLISH_TO_DOCKERHUB: ${{ vars.PUBLISH_TO_DOCKERHUB || 'false' }}
 
 jobs:
   test:
@@ -80,8 +81,8 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta-ghcr.outputs.tags }}
+      image-digest: ${{ steps.build-ghcr.outputs.digest }}
       
     steps:
     - name: Checkout code
@@ -93,6 +94,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
       
     - name: Log in to Docker Hub
+      if: env.PUBLISH_TO_DOCKERHUB == 'true'
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY_DOCKERHUB }}
@@ -106,13 +108,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
         
-    - name: Extract metadata
-      id: meta
+    - name: Extract metadata for GHCR
+      id: meta-ghcr
       uses: docker/metadata-action@v5
       with:
-        images: |
-          ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
-          ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -130,28 +130,53 @@ jobs:
           org.opencontainers.image.revision={{sha}}
           org.opencontainers.image.created={{created}}
           
+    - name: Extract metadata for Docker Hub
+      id: meta-dockerhub
+      if: env.PUBLISH_TO_DOCKERHUB == 'true'
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=develop,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=Markdown to PDF with MermaidJS
+          org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
+          org.opencontainers.image.vendor=Liquid Logic Labs
+          org.opencontainers.image.source={{repo_url}}
+          org.opencontainers.image.version={{version}}
+          org.opencontainers.image.revision={{sha}}
+                    org.opencontainers.image.created={{created}}
+          
     - name: Build and push to Docker Hub
-      id: build
+      id: build-dockerhub
+      if: env.PUBLISH_TO_DOCKERHUB == 'true'
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./docker/Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.meta-dockerhub.outputs.tags }}
+        labels: ${{ steps.meta-dockerhub.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
     - name: Build and push to GHCR
+      id: build-ghcr
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./docker/Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.meta-ghcr.outputs.tags }}
+        labels: ${{ steps.meta-ghcr.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
@@ -162,6 +187,7 @@ jobs:
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        PUBLISH_TO_DOCKERHUB: ${{ env.PUBLISH_TO_DOCKERHUB }}
       run: |
         node scripts/publish-readme.js
         

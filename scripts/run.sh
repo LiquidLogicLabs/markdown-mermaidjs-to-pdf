@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run script for markdown-to-pdf converter
+# Run script for markdown-mermaidjs-to-pdf converter
 set -e
 
 # Colors for output
@@ -140,7 +140,7 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 # Run the converter
-echo -e "${BLUE}Running markdown-to-pdf batch converter...${NC}"
+echo -e "${BLUE}Running markdown-mermaidjs-to-pdf batch converter...${NC}"
 echo -e "${YELLOW}Input directory: $INPUT_DIR${NC}"
 echo -e "${YELLOW}Output directory: $OUTPUT_DIR${NC}"
 

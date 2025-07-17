@@ -1,5 +1,5 @@
-# Use Node.js 18 LTS as base image
-FROM node:18-alpine
+# Use Node.js 20 LTS as base image
+FROM node:20-alpine
 
 LABEL org.opencontainers.image.source=https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf
 LABEL org.opencontainers.image.title="Markdown to PDF with MermaidJS"

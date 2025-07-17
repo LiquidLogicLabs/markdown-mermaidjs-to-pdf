@@ -57,6 +57,11 @@ class ReadmePublisher {
       console.log('Skipping Docker Hub README publish - credentials not available');
       return;
     }
+    
+    if (process.env.PUBLISH_TO_DOCKERHUB !== 'true') {
+      console.log('Skipping Docker Hub README publish - PUBLISH_TO_DOCKERHUB is not enabled');
+      return;
+    }
 
     console.log('Publishing README to Docker Hub...');
 

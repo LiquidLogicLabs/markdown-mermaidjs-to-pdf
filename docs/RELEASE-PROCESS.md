@@ -1,6 +1,6 @@
 # Release Process Guide
 
-This document explains how to use the automated release scripts to increment version numbers and create releases for the markdown-to-pdf converter.
+This document explains how to use the automated release scripts to increment version numbers and create releases for the markdown-mermaidjs-to-pdf converter.
 
 ## Overview
 

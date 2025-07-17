@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build script for markdown-to-pdf converter
+# Build script for markdown-mermaidjs-to-pdf converter
 set -e
 
 # Colors for output
@@ -9,7 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}Building markdown-to-pdf Docker image...${NC}"
+echo -e "${YELLOW}Building markdown-mermaidjs-to-pdf Docker image...${NC}"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
