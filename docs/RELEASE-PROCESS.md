@@ -297,7 +297,7 @@ The release scripts integrate with:
 
 - **GitHub Actions**: Automatic builds and publishing
 - **Docker Hub**: Image publishing
-- **Google Container Registry**: Image publishing
+- **GitHub Container Registry**: Image publishing
 - **Security scanning**: Vulnerability checks
 - **SBOM generation**: Software bill of materials
 

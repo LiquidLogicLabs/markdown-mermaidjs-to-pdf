@@ -1,13 +1,13 @@
 # CI/CD Pipeline Setup Guide
 
-This document explains how to set up the GitHub Actions CI/CD pipeline for building, testing, and publishing the Docker image to both Docker Hub and Google Container Registry (GCR).
+This document explains how to set up the GitHub Actions CI/CD pipeline for building, testing, and publishing the Docker image to both Docker Hub and GitHub Container Registry (GHCR).
 
 ## Overview
 
 The CI/CD pipeline includes:
 - **Testing**: Linting, unit tests, and Docker container tests
 - **Building**: Multi-platform Docker image builds (AMD64 and ARM64)
-- **Publishing**: Automatic publishing to Docker Hub and GCR
+- **Publishing**: Automatic publishing to Docker Hub and GHCR
 - **Security**: Vulnerability scanning with Trivy
 - **Versioning**: Semantic versioning with proper tagging
 
@@ -29,33 +29,11 @@ Then add these secrets to your GitHub repository:
 - **`DOCKERHUB_USERNAME`**: Your Docker Hub username
 - **`DOCKERHUB_TOKEN`**: Your Docker Hub access token
 
-### 2. Google Cloud Platform Secrets
+### 2. GitHub Container Registry (GHCR)
 
-#### Create a Service Account
+GitHub Container Registry is automatically available for GitHub repositories. No additional setup is required as it uses the built-in `GITHUB_TOKEN`.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Select your project
-3. Go to IAM & Admin → Service Accounts
-4. Click "Create Service Account"
-5. Give it a name like "github-actions"
-6. Grant the following roles:
-   - `Storage Admin` (for GCR access)
-   - `Container Registry Service Agent` (if using Artifact Registry)
-
-#### Download JSON Key
-
-1. Click on the created service account
-2. Go to the "Keys" tab
-3. Click "Add Key" → "Create new key"
-4. Choose JSON format
-5. Download the JSON file
-
-#### Add GCR Secrets
-
-Add these secrets to your GitHub repository:
-
-- **`GCR_JSON_KEY`**: The entire content of the downloaded JSON file
-- **`GCR_PROJECT_ID`**: Your Google Cloud project ID
+**Note**: The `GITHUB_TOKEN` is automatically provided by GitHub Actions and has the necessary permissions to push to GHCR.
 
 ## Setting Up GitHub Secrets
 
@@ -97,12 +75,12 @@ docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
 docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
 ```
 
-### Google Container Registry
+### GitHub Container Registry
 ```
-gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
-gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
-gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
-gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
 ```
 
 ## Pipeline Jobs
@@ -118,7 +96,7 @@ gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
 - Runs only on main branch pushes and tags
 - Requires test job to pass
 - Builds multi-platform images
-- Pushes to both Docker Hub and GCR
+- Pushes to both Docker Hub and GHCR
 - Generates SBOM (Software Bill of Materials)
 
 ### 3. Security Scan Job
@@ -182,10 +160,10 @@ You can manually trigger the workflow:
    - Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are correct
    - Ensure the token has write permissions
 
-2. **GCR authentication failed**:
-   - Verify `GCR_JSON_KEY` contains the complete JSON
-   - Check `GCR_PROJECT_ID` is correct
-   - Ensure service account has proper permissions
+2. **GHCR authentication failed**:
+   - Verify `GITHUB_TOKEN` has write permissions
+   - Check repository permissions
+   - Ensure workflow has proper access
 
 3. **Build fails**:
    - Check Dockerfile syntax
@@ -226,5 +204,5 @@ You can manually trigger the workflow:
 
 - Use GitHub Actions cache for faster builds
 - Consider using self-hosted runners for large builds
-- Monitor GCR storage costs
+- Monitor GHCR storage costs
 - Clean up old images periodically 
