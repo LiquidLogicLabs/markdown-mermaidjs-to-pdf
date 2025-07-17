@@ -181,6 +181,14 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
+    - name: Extract first tag for SBOM
+      id: extract-tag
+      run: |
+        # Get the first tag from the metadata output
+        FIRST_TAG=$(echo "${{ steps.meta-ghcr.outputs.tags }}" | head -n1)
+        echo "first-tag=$FIRST_TAG" >> $GITHUB_OUTPUT
+        echo "Using tag for SBOM: $FIRST_TAG"
+        
     - name: Publish README to Registries
       if: startsWith(github.ref, 'refs/tags/')
       env:
@@ -207,7 +215,7 @@ jobs:
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
-        image: ${{ steps.meta-ghcr.outputs.tags }}
+        image: ${{ steps.extract-tag.outputs.first-tag }}
         format: spdx-json
         output-file: sbom.spdx.json
         
@@ -235,10 +243,18 @@ jobs:
         echo "Image tag from build job: ${{ needs.build-and-push.outputs.image-tag }}"
         echo "Image digest from build job: ${{ needs.build-and-push.outputs.image-digest }}"
       
+    - name: Extract first tag for security scan
+      id: extract-security-tag
+      run: |
+        # Get the first tag from the build job output
+        FIRST_TAG=$(echo "${{ needs.build-and-push.outputs.image-tag }}" | head -n1)
+        echo "first-tag=$FIRST_TAG" >> $GITHUB_OUTPUT
+        echo "Using tag for security scan: $FIRST_TAG"
+      
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ needs.build-and-push.outputs.image-tag }}
+        image-ref: ${{ steps.extract-security-tag.outputs.first-tag }}
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
