@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  markdown-mermaidjs-to-pdf:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+    container_name: markdown-mermaidjs-to-pdf
+    environment:
+      - NODE_ENV=production
+      - LOGGING_ENABLED=true
+      - LOG_LEVEL=info
+      - LOG_DIR=/app/logs
+    volumes:
+      # Mount input and output directories
+      - ../data/input:/data/input
+      - ../data/output:/data/output
+      # Mount logs directory
+      - ../data/logs:/data/logs
+    # For development, you can override the command:
+    # command: ["node", "src/root/app/index.js", "-i", "/workspace/tests/samples/sample1.md", "-o", "/workspace/output.pdf"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s 

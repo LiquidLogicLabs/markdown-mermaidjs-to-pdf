@@ -1,0 +1,46 @@
+# Test outputs and temporary files
+test/output*/
+test/data/output*/
+src/root/output*/
+data/output*/
+
+# Log files
+*.log
+test-results.log
+
+# Temporary files
+*.tmp
+*~
+*.bak
+
+# Docker build artifacts
+.dockerignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test artifacts
+mermaid_work_*/
+*.pdf
+!test/*.pdf 
