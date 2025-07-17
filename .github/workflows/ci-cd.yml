@@ -184,10 +184,17 @@ jobs:
     - name: Extract first tag for SBOM
       id: extract-tag
       run: |
-        # Get the first tag from the metadata output
-        FIRST_TAG=$(echo "${{ steps.meta-ghcr.outputs.tags }}" | head -n1)
-        echo "first-tag=$FIRST_TAG" >> $GITHUB_OUTPUT
-        echo "Using tag for SBOM: $FIRST_TAG"
+        # Determine the correct tag for SBOM generation
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # For releases, use the version tag
+          VERSION_TAG=$(echo "${{ github.ref }}" | sed 's|refs/tags/||')
+          SBOM_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:$VERSION_TAG"
+        else
+          # For main branch, use latest tag
+          SBOM_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:latest"
+        fi
+        echo "first-tag=$SBOM_TAG" >> $GITHUB_OUTPUT
+        echo "Using tag for SBOM: $SBOM_TAG"
         
     - name: Publish README to Registries
       if: startsWith(github.ref, 'refs/tags/')
@@ -246,10 +253,17 @@ jobs:
     - name: Extract first tag for security scan
       id: extract-security-tag
       run: |
-        # Get the first tag from the build job output
-        FIRST_TAG=$(echo "${{ needs.build-and-push.outputs.image-tag }}" | head -n1)
-        echo "first-tag=$FIRST_TAG" >> $GITHUB_OUTPUT
-        echo "Using tag for security scan: $FIRST_TAG"
+        # Determine the correct tag for security scanning
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # For releases, use the version tag
+          VERSION_TAG=$(echo "${{ github.ref }}" | sed 's|refs/tags/||')
+          SECURITY_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:$VERSION_TAG"
+        else
+          # For main branch, use latest tag
+          SECURITY_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:latest"
+        fi
+        echo "first-tag=$SECURITY_TAG" >> $GITHUB_OUTPUT
+        echo "Using tag for security scan: $SECURITY_TAG"
       
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
