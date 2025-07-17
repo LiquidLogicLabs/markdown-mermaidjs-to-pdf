@@ -3,10 +3,48 @@
 # Act testing script with proper container options
 set -e
 
-# Accept job name as argument, default to 'test'
-JOB_NAME=${1:-test}
+# Parse command line arguments
+JOB_NAME="test"
+DRYRUN=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dryrun)
+      DRYRUN=true
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 [JOB_NAME] [--dryrun]"
+      echo ""
+      echo "Arguments:"
+      echo "  JOB_NAME    Job to run (default: test)"
+      echo "  --dryrun    Run act in dry-run mode"
+      echo "  --help, -h  Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  $0                    # Run test job"
+      echo "  $0 build-and-push     # Run build-and-push job"
+      echo "  $0 --dryrun           # Run test job in dry-run mode"
+      echo "  $0 build-and-push --dryrun  # Run build-and-push job in dry-run mode"
+      exit 0
+      ;;
+    *)
+      if [[ "$JOB_NAME" == "test" ]]; then
+        JOB_NAME="$1"
+      else
+        echo "Error: Unknown argument '$1'"
+        echo "Use --help for usage information"
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
 
 echo "🧪 Testing with act using proper container options... (job: $JOB_NAME)"
+if [[ "$DRYRUN" == "true" ]]; then
+  echo "🔍 Running in DRY-RUN mode"
+fi
 
 # Get the current directory
 CURRENT_PATH=$(pwd)
@@ -53,12 +91,32 @@ fi
 
 echo "🔧 Running act with proper container options..."
 
-# Run act with container options for volume mounting
-act push --job "$JOB_NAME" \
-  --container-options "-v ${CURRENT_PATH}/data:/workspace/data" \
-  --env PUBLISH_TO_DOCKERHUB=false \
-  --env DOCKERHUB_OWNER=ravensorb \
+# Build act command
+# Build act command as an argument array
+ACT_ARGS=(
+  push
+  --job "$JOB_NAME"
+  --container-options "-v ${CURRENT_PATH}/data:/workspace/data"
+  --env PUBLISH_TO_DOCKERHUB=true
+  --env PUBLISH_TO_GHCR=true
+  --env DOCKERHUB_OWNER=ravensorb
   --env GHCR_OWNER=liquidlogiclabs
+)
+
+# Add dryrun flag if specified
+if [[ "$DRYRUN" == "true" ]]; then
+  ACT_ARGS+=(--dryrun)
+fi
+
+echo "Running: act ${ACT_ARGS[*]}"
+act "${ACT_ARGS[@]}"
+
+# Skip results checking in dryrun mode
+if [[ "$DRYRUN" == "true" ]]; then
+  echo "🔍 Dry-run completed - no actual files generated"
+  echo "✅ Act dry-run completed successfully!"
+  exit 0
+fi
 
 echo "📋 Checking results..."
 # List output directory contents

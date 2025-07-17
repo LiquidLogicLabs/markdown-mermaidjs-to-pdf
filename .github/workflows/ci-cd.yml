@@ -15,6 +15,7 @@ env:
   DOCKERHUB_OWNER: ${{ vars.DOCKERHUB_OWNER || 'ravensorb' }}
   GHCR_OWNER: ${{ vars.GHCR_OWNER || 'liquidlogiclabs' }}
   PUBLISH_TO_DOCKERHUB: ${{ vars.PUBLISH_TO_DOCKERHUB || 'true' }}
+  PUBLISH_TO_GHCR: ${{ vars.PUBLISH_TO_GHCR || 'true' }}
 
 jobs:
   test:
@@ -140,8 +141,7 @@ jobs:
       with:
         images: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME_SHORT }}
         tags: |
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=develop,enable={{is_default_branch}}
+          type=raw,value=latest
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=semver,pattern={{major}}
@@ -166,34 +166,19 @@ jobs:
         echo "GitHub ref: ${{ github.ref }}"
         echo "GitHub event: ${{ github.event_name }}"
         echo "Is default branch: ${{ github.ref == 'refs/heads/main' }}"
-        
-    - name: Ensure GHCR tags exist
-      id: ensure-ghcr-tags
-      run: |
-        if [ -z "${{ steps.meta-ghcr.outputs.tags }}" ]; then
-          echo "No tags generated, creating fallback tag"
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            FALLBACK_TAG="${{ env.REGISTRY_GHCR }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:latest"
-          else
-            FALLBACK_TAG="${{ env.REGISTRY_GHCR }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:edge"
-          fi
-          echo "tags=$FALLBACK_TAG" >> $GITHUB_OUTPUT
-        else
-          echo "tags=${{ steps.meta-ghcr.outputs.tags }}" >> $GITHUB_OUTPUT
-        fi
-        
+               
     - name: Extract metadata for Docker Hub
       id: meta-dockerhub
-      if: env.PUBLISH_TO_DOCKERHUB == 'true'
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME_SHORT }}
         tags: |
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=develop,enable={{is_default_branch}}
+          type=raw,value=latest
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=semver,pattern={{major}}
+        flavor: |
+          latest=auto
         labels: |
           org.opencontainers.image.title=Markdown to PDF with MermaidJS
           org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
@@ -214,45 +199,47 @@ jobs:
         echo "GitHub ref: ${{ github.ref }}"
         echo "GitHub event: ${{ github.event_name }}"
         
-    - name: Ensure Docker Hub tags exist
-      id: ensure-dockerhub-tags
-      if: env.PUBLISH_TO_DOCKERHUB == 'true'
-      run: |
-        if [ -z "${{ steps.meta-dockerhub.outputs.tags }}" ]; then
-          echo "No tags generated, creating fallback tag"
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            FALLBACK_TAG="${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:latest"
-          else
-            FALLBACK_TAG="${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:edge"
-          fi
-          echo "tags=$FALLBACK_TAG" >> $GITHUB_OUTPUT
-        else
-          echo "tags=${{ steps.meta-dockerhub.outputs.tags }}" >> $GITHUB_OUTPUT
-        fi
+
         
     - name: Build and push to Docker Hub
       id: build-dockerhub
       if: env.PUBLISH_TO_DOCKERHUB == 'true'
+      run: |
+        if [[ "${{ env.SKIP_PUSH }}" == "true" ]]; then
+          echo "🔍 SKIP_PUSH=true - Building Docker Hub image without pushing"
+        else
+          echo "🚀 Building and pushing Docker Hub image"
+        fi
+      
+    - name: Build Docker Hub image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./docker/Dockerfile
         platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.ensure-dockerhub-tags.outputs.tags }}
+        push: ${{ env.PUBLISH_TO_DOCKERHUB == 'true' }}
+        tags: ${{ steps.meta-dockerhub.outputs.tags }}
         labels: ${{ steps.meta-dockerhub.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
     - name: Build and push to GHCR
       id: build-ghcr
+      run: |
+        if [[ "${{ env.SKIP_PUSH }}" == "true" ]]; then
+          echo "🔍 SKIP_PUSH=true - Building GHCR image without pushing"
+        else
+          echo "🚀 Building and pushing GHCR image"
+        fi
+      
+    - name: Build GHCR image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./docker/Dockerfile
         platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.ensure-ghcr-tags.outputs.tags }}
+        push: ${{ env.PUBLISH_TO_GHCR == 'true' }}
+        tags: ${{ steps.meta-ghcr.outputs.tags }}
         labels: ${{ steps.meta-ghcr.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
