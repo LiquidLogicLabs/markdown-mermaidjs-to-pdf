@@ -43,4 +43,18 @@ yarn-error.log*
 # Test artifacts
 mermaid_work_*/
 *.pdf
-!test/*.pdf 
+!test/*.pdf
+
+# Test coverage reports
+coverage/
+.nyc_output/
+*.lcov
+
+# Jest cache
+.jest/
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache 

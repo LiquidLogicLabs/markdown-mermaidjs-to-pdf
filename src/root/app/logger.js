@@ -14,7 +14,7 @@ function setupLogger() {
   // Helper function to format timing information
   function formatTimingInfo(meta) {
     const timingParts = [];
-    
+
     // Format duration fields
     if (meta.duration !== undefined) {
       timingParts.push(`duration: ${meta.durationFormatted || `${meta.duration}ms`}`);
@@ -22,39 +22,39 @@ function setupLogger() {
     if (meta.totalDuration !== undefined) {
       timingParts.push(`total: ${meta.totalDurationFormatted || `${meta.totalDuration}ms`}`);
     }
-    
+
     // Format timing object
     if (meta.timing) {
       const timing = meta.timing;
       const timingDetails = [];
-      if (timing.readFile !== undefined) timingDetails.push(`read: ${timing.readFile}ms`);
-      if (timing.processMarkdown !== undefined) timingDetails.push(`process: ${timing.processMarkdown}ms`);
-      if (timing.generatePdf !== undefined) timingDetails.push(`pdf: ${timing.generatePdf}ms`);
-      if (timing.total !== undefined) timingDetails.push(`total: ${timing.total}ms`);
+      if (timing.readFile !== undefined) {timingDetails.push(`read: ${timing.readFile}ms`);}
+      if (timing.processMarkdown !== undefined) {timingDetails.push(`process: ${timing.processMarkdown}ms`);}
+      if (timing.generatePdf !== undefined) {timingDetails.push(`pdf: ${timing.generatePdf}ms`);}
+      if (timing.total !== undefined) {timingDetails.push(`total: ${timing.total}ms`);}
       if (timingDetails.length > 0) {
         timingParts.push(`steps: [${timingDetails.join(', ')}]`);
       }
     }
-    
+
     // Format PDF timing object
     if (meta.pdfTiming) {
       const pdfTiming = meta.pdfTiming;
       const pdfDetails = [];
-      if (pdfTiming.browserInit !== undefined) pdfDetails.push(`browser: ${pdfTiming.browserInit}ms`);
-      if (pdfTiming.contentSet !== undefined) pdfDetails.push(`content: ${pdfTiming.contentSet}ms`);
-      if (pdfTiming.mermaidLoad !== undefined) pdfDetails.push(`mermaid: ${pdfTiming.mermaidLoad}ms`);
-      if (pdfTiming.diagramRender !== undefined) pdfDetails.push(`diagrams: ${pdfTiming.diagramRender}ms`);
-      if (pdfTiming.pdfGeneration !== undefined) pdfDetails.push(`generate: ${pdfTiming.pdfGeneration}ms`);
+      if (pdfTiming.browserInit !== undefined) {pdfDetails.push(`browser: ${pdfTiming.browserInit}ms`);}
+      if (pdfTiming.contentSet !== undefined) {pdfDetails.push(`content: ${pdfTiming.contentSet}ms`);}
+      if (pdfTiming.mermaidLoad !== undefined) {pdfDetails.push(`mermaid: ${pdfTiming.mermaidLoad}ms`);}
+      if (pdfTiming.diagramRender !== undefined) {pdfDetails.push(`diagrams: ${pdfTiming.diagramRender}ms`);}
+      if (pdfTiming.pdfGeneration !== undefined) {pdfDetails.push(`generate: ${pdfTiming.pdfGeneration}ms`);}
       if (pdfDetails.length > 0) {
         timingParts.push(`pdf: [${pdfDetails.join(', ')}]`);
       }
     }
-    
+
     // Format total PDF time
     if (meta.totalPdfTime !== undefined) {
       timingParts.push(`pdfTotal: ${meta.totalPdfTimeFormatted || `${meta.totalPdfTime}ms`}`);
     }
-    
+
     return timingParts.length > 0 ? ` (${timingParts.join(', ')})` : '';
   }
 
@@ -73,7 +73,7 @@ function setupLogger() {
     }),
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
       let metaStr = '';
-      
+
       // Check if this is timing-related information
       if (meta.duration !== undefined || meta.timing !== undefined || meta.pdfTiming !== undefined) {
         metaStr = formatTimingInfo(meta);
@@ -94,7 +94,7 @@ function setupLogger() {
           metaStr = ` ${JSON.stringify(simplifiedMeta)}`;
         }
       }
-      
+
       return `${timestamp} [${level}]: ${message}${metaStr}`;
     })
   );
@@ -143,4 +143,4 @@ function setupLogger() {
   return logger;
 }
 
-module.exports = { setupLogger }; 
+module.exports = { setupLogger };

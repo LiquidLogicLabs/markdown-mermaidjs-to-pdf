@@ -1,5 +1,4 @@
 const fs = require('fs-extra');
-const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer');
 const { setupLogger } = require('./logger');
@@ -10,7 +9,7 @@ class MarkdownConverter {
     this.browser = null;
     this.page = null;
     this.mermaid = null;
-    
+
     // Configure Marked
     marked.setOptions({
       breaks: true,
@@ -22,8 +21,8 @@ class MarkdownConverter {
 
   // Timing utility function
   formatDuration(ms) {
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
+    if (ms < 1000) {return `${ms}ms`;}
+    if (ms < 60000) {return `${(ms / 1000).toFixed(2)}s`;}
     const minutes = Math.floor(ms / 60000);
     const seconds = ((ms % 60000) / 1000).toFixed(2);
     return `${minutes}m ${seconds}s`;
@@ -32,7 +31,7 @@ class MarkdownConverter {
   async initializeMermaid() {
     if (!this.mermaid) {
       this.mermaid = await import('mermaid');
-      
+
       // Set up JSDOM for Node.js environment with SVG support
       const { JSDOM } = await import('jsdom');
       const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
@@ -40,16 +39,16 @@ class MarkdownConverter {
         pretendToBeVisual: true,
         resources: 'usable'
       });
-      
+
       global.document = dom.window.document;
       global.window = dom.window;
       global.navigator = dom.window.navigator;
-      
+
       // Mock DOMPurify to prevent sanitization errors
       global.DOMPurify = {
         sanitize: (html) => html
       };
-      
+
       // Mock SVG getBBox function
       const originalCreateElement = dom.window.document.createElement;
       dom.window.document.createElement = function(tagName) {
@@ -61,7 +60,7 @@ class MarkdownConverter {
         }
         return element;
       };
-      
+
       this.mermaid.default.initialize({
         startOnLoad: false,
         theme: 'default',
@@ -85,12 +84,12 @@ class MarkdownConverter {
     try {
       // Initialize Mermaid
       await this.initializeMermaid();
-      
+
       // Read markdown file
       const readStartTime = Date.now();
       const markdownContent = await this.readMarkdownFile(inputPath);
       timing.readFile = Date.now() - readStartTime;
-      this.logger.debug('Markdown file read successfully', { 
+      this.logger.debug('Markdown file read successfully', {
         size: markdownContent.length,
         duration: timing.readFile,
         durationFormatted: this.formatDuration(timing.readFile)
@@ -100,7 +99,7 @@ class MarkdownConverter {
       const processStartTime = Date.now();
       const htmlContent = await this.processMarkdown(markdownContent);
       timing.processMarkdown = Date.now() - processStartTime;
-      this.logger.debug('Markdown processed to HTML', { 
+      this.logger.debug('Markdown processed to HTML', {
         htmlSize: htmlContent.length,
         duration: timing.processMarkdown,
         durationFormatted: this.formatDuration(timing.processMarkdown)
@@ -110,15 +109,15 @@ class MarkdownConverter {
       const pdfStartTime = Date.now();
       await this.generatePdf(htmlContent, outputPath);
       timing.generatePdf = Date.now() - pdfStartTime;
-      this.logger.debug('PDF generation completed', { 
+      this.logger.debug('PDF generation completed', {
         outputPath,
         duration: timing.generatePdf,
         durationFormatted: this.formatDuration(timing.generatePdf)
       });
 
       timing.total = Date.now() - conversionStartTime;
-      this.logger.info('Conversion completed successfully', { 
-        inputPath, 
+      this.logger.info('Conversion completed successfully', {
+        inputPath,
         outputPath,
         timing,
         totalDuration: timing.total,
@@ -127,8 +126,8 @@ class MarkdownConverter {
 
     } catch (error) {
       timing.total = Date.now() - conversionStartTime;
-      this.logger.error('Conversion failed', { 
-        error: error.message, 
+      this.logger.error('Conversion failed', {
+        error: error.message,
         stack: error.stack,
         timing,
         totalDuration: timing.total,
@@ -142,13 +141,13 @@ class MarkdownConverter {
 
   async readMarkdownFile(filePath) {
     this.logger.debug('Reading markdown file', { filePath });
-    
+
     try {
       const content = await fs.readFile(filePath, 'utf8');
-      this.logger.debug('Markdown file read successfully', { 
-        filePath, 
+      this.logger.debug('Markdown file read successfully', {
+        filePath,
         size: content.length,
-        lines: content.split('\n').length 
+        lines: content.split('\n').length
       });
       return content;
     } catch (error) {
@@ -169,7 +168,7 @@ class MarkdownConverter {
     for (let i = 0; i < mermaidDiagrams.length; i++) {
       const diagram = mermaidDiagrams[i];
       const placeholder = `\n\n<div class="mermaid-diagram" data-mermaid="${encodeURIComponent(diagram.code)}">\n<div class="mermaid-placeholder">Rendering diagram...</div>\n</div>\n\n`;
-      
+
       processedContent = processedContent.replace(diagram.fullMatch, placeholder);
       this.logger.debug('Replaced Mermaid diagram with placeholder', { index: i, type: diagram.type });
     }
@@ -198,7 +197,7 @@ class MarkdownConverter {
       });
     }
 
-    this.logger.debug('Mermaid diagrams extracted', { 
+    this.logger.debug('Mermaid diagrams extracted', {
       count: diagrams.length,
       types: diagrams.map(d => d.type)
     });
@@ -208,21 +207,21 @@ class MarkdownConverter {
 
   detectDiagramType(code) {
     const firstLine = code.split('\n')[0].trim().toLowerCase();
-    
-    if (firstLine.includes('graph') || firstLine.includes('flowchart')) return 'flowchart';
-    if (firstLine.includes('sequence')) return 'sequence';
-    if (firstLine.includes('class')) return 'class';
-    if (firstLine.includes('state')) return 'state';
-    if (firstLine.includes('er')) return 'er';
-    if (firstLine.includes('journey')) return 'journey';
-    if (firstLine.includes('gantt')) return 'gantt';
-    if (firstLine.includes('pie')) return 'pie';
-    if (firstLine.includes('gitgraph')) return 'gitgraph';
-    if (firstLine.includes('mindmap')) return 'mindmap';
-    if (firstLine.includes('timeline')) return 'timeline';
-    if (firstLine.includes('zenuml')) return 'zenuml';
-    if (firstLine.includes('sankey')) return 'sankey';
-    
+
+    if (firstLine.includes('graph') || firstLine.includes('flowchart')) {return 'flowchart';}
+    if (firstLine.includes('sequence')) {return 'sequence';}
+    if (firstLine.includes('class')) {return 'class';}
+    if (firstLine.includes('state')) {return 'state';}
+    if (firstLine.includes('er')) {return 'er';}
+    if (firstLine.includes('journey')) {return 'journey';}
+    if (firstLine.includes('gantt')) {return 'gantt';}
+    if (firstLine.includes('pie')) {return 'pie';}
+    if (firstLine.includes('gitgraph')) {return 'gitgraph';}
+    if (firstLine.includes('mindmap')) {return 'mindmap';}
+    if (firstLine.includes('timeline')) {return 'timeline';}
+    if (firstLine.includes('zenuml')) {return 'zenuml';}
+    if (firstLine.includes('sankey')) {return 'sankey';}
+
     return 'unknown';
   }
 
@@ -236,11 +235,11 @@ class MarkdownConverter {
       this.logger.debug('Mermaid diagram rendered successfully');
       return result.svg;
     } catch (error) {
-      this.logger.error('Failed to render Mermaid diagram', { 
-        error: error.message, 
-        code: code.substring(0, 100) + '...' 
+      this.logger.error('Failed to render Mermaid diagram', {
+        error: error.message,
+        code: code.substring(0, 100) + '...'
       });
-      
+
       // Return error placeholder
       return `<div style="border: 2px solid red; padding: 10px; color: red;">
         <strong>Mermaid Diagram Error:</strong><br>
@@ -408,7 +407,7 @@ class MarkdownConverter {
   async generatePdf(htmlContent, outputPath) {
     const pdfStartTime = Date.now();
     this.logger.debug('Initializing browser for PDF generation');
-    
+
     const pdfTiming = {
       browserInit: 0,
       contentSet: 0,
@@ -416,7 +415,7 @@ class MarkdownConverter {
       diagramRender: 0,
       pdfGeneration: 0
     };
-    
+
     try {
       // Launch browser
       const browserStartTime = Date.now();
@@ -435,16 +434,16 @@ class MarkdownConverter {
 
       this.page = await this.browser.newPage();
       pdfTiming.browserInit = Date.now() - browserStartTime;
-      this.logger.debug('Browser initialized', { 
+      this.logger.debug('Browser initialized', {
         duration: pdfTiming.browserInit,
         durationFormatted: this.formatDuration(pdfTiming.browserInit)
       });
-      
+
       // Set content and wait for any dynamic content
       const contentStartTime = Date.now();
       await this.page.setContent(htmlContent, { waitUntil: 'networkidle0' });
       pdfTiming.contentSet = Date.now() - contentStartTime;
-      this.logger.debug('HTML content set in page', { 
+      this.logger.debug('HTML content set in page', {
         duration: pdfTiming.contentSet,
         durationFormatted: this.formatDuration(pdfTiming.contentSet)
       });
@@ -455,7 +454,7 @@ class MarkdownConverter {
         return typeof window.mermaid !== 'undefined';
       }, { timeout: 10000 });
       pdfTiming.mermaidLoad = Date.now() - mermaidLoadStartTime;
-      this.logger.debug('Mermaid library loaded', { 
+      this.logger.debug('Mermaid library loaded', {
         duration: pdfTiming.mermaidLoad,
         durationFormatted: this.formatDuration(pdfTiming.mermaidLoad)
       });
@@ -478,17 +477,17 @@ class MarkdownConverter {
           const diagrams = document.querySelectorAll('.mermaid-diagram');
           const debugDiv = document.getElementById('mermaid-debug-info');
           if (diagrams.length === 0) {
-            if (debugDiv) debugDiv.innerText = 'Mermaid: No diagrams found.';
+            if (debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
             return true;
           }
           let rendered = 0, failed = 0;
           diagrams.forEach(diagram => {
             const svg = diagram.querySelector('svg');
             const error = diagram.querySelector('div[style*="color: red"]');
-            if (svg) rendered++;
-            if (error) failed++;
+            if (svg) {rendered++;}
+            if (error) {failed++;}
           });
-          if (debugDiv) debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed...`;
+          if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed...`;}
           return diagrams.length === (rendered + failed);
         }, { timeout: 120000 });
       } catch (timeoutError) {
@@ -496,10 +495,10 @@ class MarkdownConverter {
         this.logger.warn('Mermaid rendering timeout, continuing with available diagrams');
         await this.page.evaluate(() => {
           const debugDiv = document.getElementById('mermaid-debug-info');
-          if (debugDiv) debugDiv.innerText = 'Mermaid: Timeout occurred, showing available diagrams.';
+          if (debugDiv) {debugDiv.innerText = 'Mermaid: Timeout occurred, showing available diagrams.';}
         });
       }
-      
+
       // Update debug output to show final status
       await this.page.evaluate(() => {
         const diagrams = document.querySelectorAll('.mermaid-diagram');
@@ -508,13 +507,13 @@ class MarkdownConverter {
         diagrams.forEach(diagram => {
           const svg = diagram.querySelector('svg');
           const error = diagram.querySelector('div[style*="color: red"]');
-          if (svg) rendered++;
-          if (error) failed++;
+          if (svg) {rendered++;}
+          if (error) {failed++;}
         });
-        if (debugDiv) debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;
+        if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;}
       });
       pdfTiming.diagramRender = Date.now() - diagramStartTime;
-      this.logger.debug('Mermaid diagrams rendered', { 
+      this.logger.debug('Mermaid diagrams rendered', {
         duration: pdfTiming.diagramRender,
         durationFormatted: this.formatDuration(pdfTiming.diagramRender)
       });
@@ -537,9 +536,9 @@ class MarkdownConverter {
       this.logger.debug('Generating PDF with options', pdfOptions);
       await this.page.pdf(pdfOptions);
       pdfTiming.pdfGeneration = Date.now() - pdfGenStartTime;
-      
+
       const totalPdfTime = Date.now() - pdfStartTime;
-      this.logger.info('PDF generated successfully', { 
+      this.logger.info('PDF generated successfully', {
         outputPath,
         pdfTiming,
         totalPdfTime,
@@ -548,8 +547,8 @@ class MarkdownConverter {
 
     } catch (error) {
       const totalPdfTime = Date.now() - pdfStartTime;
-      this.logger.error('PDF generation failed', { 
-        error: error.message, 
+      this.logger.error('PDF generation failed', {
+        error: error.message,
         stack: error.stack,
         pdfTiming,
         totalPdfTime,
@@ -561,7 +560,7 @@ class MarkdownConverter {
 
   async cleanup() {
     this.logger.debug('Cleaning up resources');
-    
+
     if (this.page) {
       try {
         await this.page.close();
@@ -582,4 +581,4 @@ class MarkdownConverter {
   }
 }
 
-module.exports = { MarkdownConverter }; 
+module.exports = { MarkdownConverter };

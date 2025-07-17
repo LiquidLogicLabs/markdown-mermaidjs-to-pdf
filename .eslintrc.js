@@ -2,7 +2,8 @@ module.exports = {
   env: {
     node: true,
     es2021: true,
-    jest: true
+    jest: true,
+    browser: true
   },
   extends: [
     'eslint:recommended'
@@ -13,7 +14,7 @@ module.exports = {
   },
   rules: {
     // Error handling
-    'no-console': 'warn',
+    'no-console': 'off', // Allow console statements for CLI application
     'no-debugger': 'error',
     
     // Code quality
@@ -37,7 +38,7 @@ module.exports = {
     'eol-last': 'error',
     
     // Node.js specific
-    'no-process-exit': 'error',
+    'no-process-exit': 'off', // Allow process.exit for CLI applications
     'no-path-concat': 'error'
   },
   ignorePatterns: [

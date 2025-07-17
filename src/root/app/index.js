@@ -13,8 +13,8 @@ const logger = setupLogger();
 
 // Timing utility functions
 function formatDuration(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
+  if (ms < 1000) {return `${ms}ms`;}
+  if (ms < 60000) {return `${(ms / 1000).toFixed(2)}s`;}
   const minutes = Math.floor(ms / 60000);
   const seconds = ((ms % 60000) / 1000).toFixed(2);
   return `${minutes}m ${seconds}s`;
@@ -22,7 +22,7 @@ function formatDuration(ms) {
 
 async function main() {
   const startTime = Date.now();
-  
+
   program
     .name('markdown-to-pdf')
     .description('Convert markdown files with Mermaid diagrams to PDF')
@@ -68,14 +68,14 @@ async function main() {
 
     // Find all markdown files in input directory
     const files = await fs.readdir(inputDir);
-    const markdownFiles = files.filter(file => 
+    const markdownFiles = files.filter(file =>
       file.toLowerCase().endsWith('.md') || file.toLowerCase().endsWith('.markdown')
     );
 
-    logger.info('Found markdown files', { 
-      totalFiles: files.length, 
-      markdownFiles: markdownFiles.length,
-      markdownFiles: markdownFiles 
+    logger.info('Found markdown files', {
+      totalFiles: files.length,
+      markdownFilesCount: markdownFiles.length,
+      markdownFiles: markdownFiles
     });
 
     if (markdownFiles.length === 0) {
@@ -109,9 +109,9 @@ async function main() {
         const fileDuration = fileEndTime - fileStartTime;
         conversionTimes.push({ file, duration: fileDuration, success: true });
 
-        logger.info('File converted successfully', { 
-          inputFile: file, 
-          outputFile, 
+        logger.info('File converted successfully', {
+          inputFile: file,
+          outputFile,
           duration: fileDuration,
           durationFormatted: formatDuration(fileDuration)
         });
@@ -123,9 +123,9 @@ async function main() {
         const fileDuration = fileEndTime - fileStartTime;
         conversionTimes.push({ file, duration: fileDuration, success: false });
 
-        logger.error('File conversion failed', { 
-          inputFile: file, 
-          error: error.message, 
+        logger.error('File conversion failed', {
+          inputFile: file,
+          error: error.message,
           stack: error.stack,
           duration: fileDuration,
           durationFormatted: formatDuration(fileDuration)
@@ -140,17 +140,16 @@ async function main() {
 
     // Calculate timing statistics
     const successfulTimes = conversionTimes.filter(t => t.success).map(t => t.duration);
-    const failedTimes = conversionTimes.filter(t => !t.success).map(t => t.duration);
-    
-    const avgSuccessTime = successfulTimes.length > 0 ? 
+
+    const avgSuccessTime = successfulTimes.length > 0 ?
       successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length : 0;
     const minSuccessTime = successfulTimes.length > 0 ? Math.min(...successfulTimes) : 0;
     const maxSuccessTime = successfulTimes.length > 0 ? Math.max(...successfulTimes) : 0;
 
     // Summary
-    logger.info('Batch conversion completed', { 
-      successCount, 
-      errorCount, 
+    logger.info('Batch conversion completed', {
+      successCount,
+      errorCount,
       totalDuration,
       totalDurationFormatted: formatDuration(totalDuration),
       avgSuccessTime: avgSuccessTime,
@@ -168,9 +167,9 @@ async function main() {
     }
     console.log(chalk.blue(`📁 Output directory: ${outputDir}`));
     console.log(chalk.blue(`⏱️  Total processing time: ${formatDuration(totalDuration)}`));
-    
+
     if (successfulTimes.length > 0) {
-      console.log(chalk.blue(`📊 Timing statistics (successful conversions):`));
+      console.log(chalk.blue('📊 Timing statistics (successful conversions):'));
       console.log(chalk.blue(`   • Average: ${formatDuration(avgSuccessTime)}`));
       console.log(chalk.blue(`   • Fastest: ${formatDuration(minSuccessTime)}`));
       console.log(chalk.blue(`   • Slowest: ${formatDuration(maxSuccessTime)}`));
@@ -178,7 +177,7 @@ async function main() {
 
     // Detailed timing breakdown
     if (conversionTimes.length > 0) {
-      console.log(chalk.blue(`\n📋 Detailed timing breakdown:`));
+      console.log(chalk.blue('\n📋 Detailed timing breakdown:'));
       conversionTimes.forEach(({ file, duration, success }) => {
         const status = success ? chalk.green('✓') : chalk.red('✗');
         const timeColor = success ? chalk.green : chalk.red;
@@ -194,9 +193,9 @@ async function main() {
   } catch (error) {
     const totalEndTime = Date.now();
     const totalDuration = totalEndTime - startTime;
-    
-    logger.error('Batch conversion failed', { 
-      error: error.message, 
+
+    logger.error('Batch conversion failed', {
+      error: error.message,
       stack: error.stack,
       totalDuration,
       totalDurationFormatted: formatDuration(totalDuration)
@@ -214,7 +213,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   logger.error('Unhandled rejection', { reason: reason?.message || reason, stack: reason?.stack });
   console.error(chalk.red(`Unhandled rejection: ${reason}`));
   process.exit(1);
@@ -224,4 +223,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { main }; 
+module.exports = { main };
