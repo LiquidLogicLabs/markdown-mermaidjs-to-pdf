@@ -102,6 +102,10 @@ ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
 ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
 ```
 
+**Note**: The image names are configurable via environment variables:
+- `IMAGE_NAME`: Full image name (e.g., `liquidlogiclabs/markdown-mermaidjs-to-pdf`)
+- `IMAGE_NAME_SHORT`: Short image name (e.g., `markdown-mermaidjs-to-pdf`)
+
 ## Pipeline Jobs
 
 ### 1. Test Job

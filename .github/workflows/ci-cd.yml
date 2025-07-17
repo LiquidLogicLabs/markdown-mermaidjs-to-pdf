@@ -11,6 +11,7 @@ env:
   REGISTRY_DOCKERHUB: docker.io
   REGISTRY_GHCR: ghcr.io
   IMAGE_NAME: liquidlogiclabs/markdown-mermaidjs-to-pdf
+  IMAGE_NAME_SHORT: markdown-mermaidjs-to-pdf
   PUBLISH_TO_DOCKERHUB: ${{ vars.PUBLISH_TO_DOCKERHUB || 'false' }}
 
 jobs:
@@ -25,7 +26,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         
     - name: Install dependencies
@@ -112,7 +113,7 @@ jobs:
       id: meta-ghcr
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -188,6 +189,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         PUBLISH_TO_DOCKERHUB: ${{ env.PUBLISH_TO_DOCKERHUB }}
+        IMAGE_NAME_SHORT: ${{ env.IMAGE_NAME_SHORT }}
       run: |
         node scripts/publish-readme.js
         
@@ -205,7 +207,7 @@ jobs:
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
-        image: ${{ steps.meta.outputs.tags }}
+        image: ${{ steps.meta-ghcr.outputs.tags }}
         format: spdx-json
         output-file: sbom.spdx.json
         
@@ -216,7 +218,7 @@ jobs:
         path: sbom.spdx.json
         
     - name: Image digest
-      run: echo ${{ steps.build.outputs.digest }}
+      run: echo ${{ steps.build-ghcr.outputs.digest }}
 
   security-scan:
     name: Security Scan
@@ -228,12 +230,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Debug image tag
+      run: |
+        echo "Image tag from build job: ${{ needs.build-and-push.outputs.image-tag }}"
+        echo "Image digest from build job: ${{ needs.build-and-push.outputs.image-digest }}"
+      
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ needs.build-and-push.outputs.image-tag }}
         format: 'sarif'
         output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
         
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3

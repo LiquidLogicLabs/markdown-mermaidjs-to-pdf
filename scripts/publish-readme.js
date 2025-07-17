@@ -11,7 +11,7 @@ class ReadmePublisher {
     this.dockerhubToken = process.env.DOCKERHUB_TOKEN;
     this.githubToken = process.env.GITHUB_TOKEN;
     this.repositoryOwner = process.env.GITHUB_REPOSITORY_OWNER || 'liquidlogiclabs';
-    this.imageName = 'markdown-mermaidjs-to-pdf';
+    this.imageName = process.env.IMAGE_NAME_SHORT || 'markdown-mermaidjs-to-pdf';
   }
 
   async readReadme() {
