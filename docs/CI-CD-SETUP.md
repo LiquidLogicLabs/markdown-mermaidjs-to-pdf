@@ -80,17 +80,25 @@ You can configure different owners for different registries:
 
 ## Versioning Strategy
 
-The pipeline uses semantic versioning with the following tag patterns:
+The pipeline uses a consistent tagging strategy with the following rules:
 
-### For Tags (Releases)
-- `v1.0.0` → `1.0.0`, `1.0`, `1`, `latest`
-- `v2.1.3` → `2.1.3`, `2.1`, `2`, `latest`
+### For All Builds
+- **Version tag**: Always includes the version from `package.json` (e.g., `1.0.0`)
+- **SHA tag**: Always includes the short git commit SHA (e.g., `a1b2c3d`)
+
+### For Releases (Tags)
+- **Version tag**: `1.0.0` (from the git tag)
+- **SHA tag**: `a1b2c3d` (commit SHA)
+- **Latest tag**: `latest` (only for actual releases)
 
 ### For Main Branch
-- `main` → `latest`, `develop`
+- **Version tag**: `1.0.0` (from package.json)
+- **SHA tag**: `a1b2c3d` (commit SHA)
+- **No latest tag** (only releases get latest)
 
-### For Pull Requests
-- `pr-123` → `pr-123`
+### Examples
+- Release `v1.0.0`: `1.0.0`, `a1b2c3d`, `latest`
+- Main branch: `1.0.0`, `a1b2c3d`
 
 ## Workflow Triggers
 
@@ -101,22 +109,26 @@ The pipeline runs on:
 
 ## Image Names
 
-The images will be published as:
+The images will be published with consistent tagging:
 
-### Docker Hub
+### For Releases (e.g., v1.0.0)
 ```
-docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
-docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
-docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
-docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
-```
+docker.io/ravensorb/markdown-mermaidjs-to-pdf:1.0.0
+docker.io/ravensorb/markdown-mermaidjs-to-pdf:a1b2c3d
+docker.io/ravensorb/markdown-mermaidjs-to-pdf:latest
 
-### GitHub Container Registry
-```
-ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
-ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
-ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:a1b2c3d
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+```
+
+### For Main Branch
+```
+docker.io/ravensorb/markdown-mermaidjs-to-pdf:1.0.0
+docker.io/ravensorb/markdown-mermaidjs-to-pdf:a1b2c3d
+
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
+ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:a1b2c3d
 ```
 
 **Note**: The image names and owners are configurable via environment variables:
