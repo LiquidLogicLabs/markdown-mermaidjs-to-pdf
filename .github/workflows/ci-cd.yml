@@ -60,22 +60,43 @@ jobs:
           echo "This is a test document for CI/CD pipeline." >> data/input/test.md
         fi
         
-        # Run the container test
+        # Determine the correct data path for different environments
+        if [ -d "/workspace/data" ]; then
+          # Running in act
+          DATA_PATH="/workspace/data"
+          echo "Detected act environment, using /workspace/data"
+        else
+          # Running in GitHub Actions
+          DATA_PATH="$(pwd)/data"
+          echo "Detected GitHub Actions environment, using $(pwd)/data"
+        fi
+        
+        # Run the container test with environment-aware paths
         docker run --rm \
-          -v "$(pwd)/data/input:/data/input" \
-          -v "$(pwd)/data/output:/data/output" \
-          -v "$(pwd)/data/logs:/data/logs" \
+          -v "$DATA_PATH/input:/data/input" \
+          -v "$DATA_PATH/output:/data/output" \
+          -v "$DATA_PATH/logs:/data/logs" \
           -e LOGGING_ENABLED=true \
           -e LOG_LEVEL=info \
           $IMAGE_NAME:test
         
-        # Verify output
-        if [ "$(ls -A data/output/*.pdf 2>/dev/null)" ]; then
+        # Verify output using the same path detection logic
+        if [ -d "/workspace/data" ]; then
+          # Running in act
+          OUTPUT_PATH="/workspace/data/output"
+          echo "Detected act environment, checking /workspace/data/output"
+        else
+          # Running in GitHub Actions
+          OUTPUT_PATH="$(pwd)/data/output"
+          echo "Detected GitHub Actions environment, checking $(pwd)/data/output"
+        fi
+        
+        if [ "$(ls -A $OUTPUT_PATH/*.pdf 2>/dev/null)" ]; then
           echo "✓ Docker test passed - PDF generated successfully"
-          echo "Generated PDFs: $(ls data/output/*.pdf)"
+          echo "Generated PDFs: $(ls $OUTPUT_PATH/*.pdf)"
         else
           echo "✗ Docker test failed - No PDF generated"
-          echo "Output directory contents: $(ls -la data/output/ 2>/dev/null || echo 'Directory empty or not found')"
+          echo "Output directory contents: $(ls -la $OUTPUT_PATH/ 2>/dev/null || echo 'Directory empty or not found')"
           exit 1
         fi
 
@@ -121,7 +142,7 @@ jobs:
         tags: |
           type=raw,value={{version}}
           type=raw,value={{sha_short}}
-          type=raw,value=latest,enable={{is_tag}}
+          type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
         labels: |
           org.opencontainers.image.title=Markdown to PDF with MermaidJS
           org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
@@ -140,7 +161,7 @@ jobs:
         tags: |
           type=raw,value={{version}}
           type=raw,value={{sha_short}}
-          type=raw,value=latest,enable={{is_tag}}
+          type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
         labels: |
           org.opencontainers.image.title=Markdown to PDF with MermaidJS
           org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
