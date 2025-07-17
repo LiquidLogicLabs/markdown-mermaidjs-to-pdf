@@ -68,10 +68,12 @@ jobs:
           $IMAGE_NAME:test
         
         # Verify output
-        if [ -f "data/output/test.pdf" ] || [ "$(ls -A data/output/*.pdf 2>/dev/null)" ]; then
+        if [ "$(ls -A data/output/*.pdf 2>/dev/null)" ]; then
           echo "✓ Docker test passed - PDF generated successfully"
+          echo "Generated PDFs: $(ls data/output/*.pdf)"
         else
           echo "✗ Docker test failed - No PDF generated"
+          echo "Output directory contents: $(ls -la data/output/ 2>/dev/null || echo 'Directory empty or not found')"
           exit 1
         fi
 
@@ -181,21 +183,6 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
-    - name: Extract first tag for SBOM
-      id: extract-tag
-      run: |
-        # Determine the correct tag for SBOM generation
-        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          # For releases, use the version tag
-          VERSION_TAG=$(echo "${{ github.ref }}" | sed 's|refs/tags/||')
-          SBOM_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:$VERSION_TAG"
-        else
-          # For main branch, use latest tag
-          SBOM_TAG="${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME_SHORT }}:latest"
-        fi
-        echo "first-tag=$SBOM_TAG" >> $GITHUB_OUTPUT
-        echo "Using tag for SBOM: $SBOM_TAG"
-        
     - name: Publish README to Registries
       if: startsWith(github.ref, 'refs/tags/')
       env:
@@ -219,18 +206,7 @@ jobs:
           org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
           org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/main/README.md
         
-    - name: Generate SBOM
-      uses: anchore/sbom-action@v0
-      with:
-        image: ${{ steps.extract-tag.outputs.first-tag }}
-        format: spdx-json
-        output-file: sbom.spdx.json
-        
-    - name: Upload SBOM
-      uses: actions/upload-artifact@v4
-      with:
-        name: sbom
-        path: sbom.spdx.json
+
         
     - name: Image digest
       run: echo ${{ steps.build-ghcr.outputs.digest }}
@@ -272,6 +248,19 @@ jobs:
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
+        
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.extract-security-tag.outputs.first-tag }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+        
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.spdx.json
         
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
