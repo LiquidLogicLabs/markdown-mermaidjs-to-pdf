@@ -40,7 +40,7 @@ module.exports = {
   restoreMocks: true,
   
   // Module name mapping (if needed)
-  moduleNameMapping: {},
+  moduleNameMapper: {},
   
   // Transform configuration (if needed)
   transform: {},
