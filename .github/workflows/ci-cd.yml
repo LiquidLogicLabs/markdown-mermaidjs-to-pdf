@@ -240,6 +240,27 @@ jobs:
         fi
         echo "first-tag=$SECURITY_TAG" >> $GITHUB_OUTPUT
         echo "Using tag for security scan: $SECURITY_TAG"
+        
+    - name: Verify image exists
+      run: |
+        echo "Verifying image exists in registry..."
+        echo "Image: ${{ steps.extract-security-tag.outputs.first-tag }}"
+        
+        # Try to pull the image to verify it exists
+        if docker pull "${{ steps.extract-security-tag.outputs.first-tag }}" > /dev/null 2>&1; then
+          echo "✅ Image exists and is accessible"
+        else
+          echo "❌ Image not found or not accessible"
+          echo "This might be a timing issue - the image may not be available yet"
+          echo "Waiting 30 seconds and trying again..."
+          sleep 30
+          if docker pull "${{ steps.extract-security-tag.outputs.first-tag }}" > /dev/null 2>&1; then
+            echo "✅ Image is now accessible after waiting"
+          else
+            echo "❌ Image still not accessible after waiting"
+            exit 1
+          fi
+        fi
       
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -248,6 +269,20 @@ jobs:
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
+        exit-code: '0'
+        
+    - name: Check Trivy results
+      run: |
+        echo "Checking for Trivy results..."
+        if [ -f "trivy-results.sarif" ]; then
+          echo "✅ Trivy SARIF file created successfully"
+          echo "File size: $(wc -c < trivy-results.sarif) bytes"
+        else
+          echo "❌ Trivy SARIF file not found"
+          echo "Current directory contents:"
+          ls -la
+          exit 1
+        fi
         
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
@@ -264,7 +299,7 @@ jobs:
         
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('trivy-results.sarif') != ''
       with:
         sarif_file: 'trivy-results.sarif'
 
