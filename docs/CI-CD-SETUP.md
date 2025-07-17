@@ -1,0 +1,230 @@
+# CI/CD Pipeline Setup Guide
+
+This document explains how to set up the GitHub Actions CI/CD pipeline for building, testing, and publishing the Docker image to both Docker Hub and Google Container Registry (GCR).
+
+## Overview
+
+The CI/CD pipeline includes:
+- **Testing**: Linting, unit tests, and Docker container tests
+- **Building**: Multi-platform Docker image builds (AMD64 and ARM64)
+- **Publishing**: Automatic publishing to Docker Hub and GCR
+- **Security**: Vulnerability scanning with Trivy
+- **Versioning**: Semantic versioning with proper tagging
+
+## Required GitHub Secrets
+
+You need to configure the following secrets in your GitHub repository:
+
+### 1. Docker Hub Secrets
+
+Go to [Docker Hub](https://hub.docker.com/) and create an access token:
+
+1. Log in to Docker Hub
+2. Go to Account Settings → Security
+3. Create a new access token
+4. Copy the token
+
+Then add these secrets to your GitHub repository:
+
+- **`DOCKERHUB_USERNAME`**: Your Docker Hub username
+- **`DOCKERHUB_TOKEN`**: Your Docker Hub access token
+
+### 2. Google Cloud Platform Secrets
+
+#### Create a Service Account
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select your project
+3. Go to IAM & Admin → Service Accounts
+4. Click "Create Service Account"
+5. Give it a name like "github-actions"
+6. Grant the following roles:
+   - `Storage Admin` (for GCR access)
+   - `Container Registry Service Agent` (if using Artifact Registry)
+
+#### Download JSON Key
+
+1. Click on the created service account
+2. Go to the "Keys" tab
+3. Click "Add Key" → "Create new key"
+4. Choose JSON format
+5. Download the JSON file
+
+#### Add GCR Secrets
+
+Add these secrets to your GitHub repository:
+
+- **`GCR_JSON_KEY`**: The entire content of the downloaded JSON file
+- **`GCR_PROJECT_ID`**: Your Google Cloud project ID
+
+## Setting Up GitHub Secrets
+
+1. Go to your GitHub repository
+2. Click on "Settings" → "Secrets and variables" → "Actions"
+3. Click "New repository secret" for each secret above
+4. Add the secret name and value
+
+## Versioning Strategy
+
+The pipeline uses semantic versioning with the following tag patterns:
+
+### For Tags (Releases)
+- `v1.0.0` → `1.0.0`, `1.0`, `1`, `latest`
+- `v2.1.3` → `2.1.3`, `2.1`, `2`, `latest`
+
+### For Main Branch
+- `main` → `latest`, `develop`
+
+### For Pull Requests
+- `pr-123` → `pr-123`
+
+## Workflow Triggers
+
+The pipeline runs on:
+- **Push to main/develop branches**: Builds and publishes
+- **Push with tags (v*)**: Creates releases
+- **Pull requests**: Runs tests only
+
+## Image Names
+
+The images will be published as:
+
+### Docker Hub
+```
+docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
+docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
+docker.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
+```
+
+### Google Container Registry
+```
+gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0.0
+gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
+gcr.io/YOUR_PROJECT_ID/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
+```
+
+## Pipeline Jobs
+
+### 1. Test Job
+- Runs on every push and PR
+- Installs dependencies
+- Runs linting and unit tests
+- Builds Docker image for testing
+- Runs container tests with sample markdown files
+
+### 2. Build and Push Job
+- Runs only on main branch pushes and tags
+- Requires test job to pass
+- Builds multi-platform images
+- Pushes to both Docker Hub and GCR
+- Generates SBOM (Software Bill of Materials)
+
+### 3. Security Scan Job
+- Runs vulnerability scanning with Trivy
+- Uploads results to GitHub Security tab
+- Only runs on main branch and tags
+
+### 4. Notify Job
+- Provides build status notifications
+- Shows image tags and digests
+
+## Creating a Release
+
+To create a new release:
+
+1. **Update version in package.json**:
+   ```json
+   {
+     "version": "1.0.0"
+   }
+   ```
+
+2. **Create and push a tag**:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+3. **The pipeline will automatically**:
+   - Run all tests
+   - Build the Docker image
+   - Push to both registries with proper tags
+   - Run security scans
+   - Create a GitHub release (if you have release automation enabled)
+
+## Testing the Pipeline
+
+### Local Testing
+Before pushing to GitHub, test locally:
+
+```bash
+# Run the test script
+./scripts/test.sh
+
+# Build the image
+./scripts/build.sh
+```
+
+### Manual Trigger
+You can manually trigger the workflow:
+1. Go to Actions tab in GitHub
+2. Select "CI/CD Pipeline"
+3. Click "Run workflow"
+4. Choose branch and click "Run workflow"
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Docker Hub authentication failed**:
+   - Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are correct
+   - Ensure the token has write permissions
+
+2. **GCR authentication failed**:
+   - Verify `GCR_JSON_KEY` contains the complete JSON
+   - Check `GCR_PROJECT_ID` is correct
+   - Ensure service account has proper permissions
+
+3. **Build fails**:
+   - Check Dockerfile syntax
+   - Verify all dependencies are available
+   - Check for platform-specific issues
+
+4. **Tests fail**:
+   - Run tests locally first
+   - Check for missing test dependencies
+   - Verify test data files exist
+
+### Debugging
+
+1. **View workflow logs**: Go to Actions tab and click on the workflow run
+2. **Check individual job logs**: Click on the job name to see detailed logs
+3. **Download artifacts**: SBOM files are available as artifacts
+4. **Security scan results**: Check the Security tab for vulnerability reports
+
+## Best Practices
+
+1. **Always test locally** before pushing
+2. **Use semantic versioning** for releases
+3. **Review security scan results** regularly
+4. **Keep dependencies updated**
+5. **Monitor build times** and optimize if needed
+6. **Use feature branches** for development
+7. **Tag releases** for production deployments
+
+## Security Considerations
+
+- Service account keys are stored as GitHub secrets
+- Images are scanned for vulnerabilities
+- Non-root user is used in the container
+- SBOM is generated for supply chain security
+- Secrets are never logged or exposed
+
+## Cost Optimization
+
+- Use GitHub Actions cache for faster builds
+- Consider using self-hosted runners for large builds
+- Monitor GCR storage costs
+- Clean up old images periodically 

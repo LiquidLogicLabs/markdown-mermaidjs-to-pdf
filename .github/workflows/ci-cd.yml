@@ -1,0 +1,216 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GCR: gcr.io
+  IMAGE_NAME: liquidlogiclabs/markdown-mermaidjs-to-pdf
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Build Docker image for testing
+      run: |
+        docker build -f docker/Dockerfile -t $IMAGE_NAME:test .
+        
+    - name: Run Docker tests
+      run: |
+        # Create test directories
+        mkdir -p data/input data/output data/logs
+        
+        # Copy sample files if they exist
+        if [ -d "tests/samples" ]; then
+          cp tests/samples/*.md data/input/ 2>/dev/null || true
+        fi
+        
+        # Create a simple test markdown if no samples exist
+        if [ ! "$(ls -A data/input/*.md 2>/dev/null)" ]; then
+          echo "# Test Document" > data/input/test.md
+          echo "This is a test document for CI/CD pipeline." >> data/input/test.md
+        fi
+        
+        # Run the container test
+        docker run --rm \
+          -v "$(pwd)/data/input:/data/input" \
+          -v "$(pwd)/data/output:/data/output" \
+          -v "$(pwd)/data/logs:/data/logs" \
+          -e LOGGING_ENABLED=true \
+          -e LOG_LEVEL=info \
+          $IMAGE_NAME:test
+        
+        # Verify output
+        if [ -f "data/output/test.pdf" ] || [ "$(ls -A data/output/*.pdf 2>/dev/null)" ]; then
+          echo "✓ Docker test passed - PDF generated successfully"
+        else
+          echo "✗ Docker test failed - No PDF generated"
+          exit 1
+        fi
+
+  build-and-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY_DOCKERHUB }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Log in to Google Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY_GCR }}
+        username: _json_key
+        password: ${{ secrets.GCR_JSON_KEY }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+          ${{ env.REGISTRY_GCR }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=develop,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=Markdown to PDF with MermaidJS
+          org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
+          org.opencontainers.image.vendor=Liquid Logic Labs
+          org.opencontainers.image.source={{repo_url}}
+          org.opencontainers.image.version={{version}}
+          org.opencontainers.image.revision={{sha}}
+          org.opencontainers.image.created={{created}}
+          
+    - name: Build and push to Docker Hub
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push to GCR
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ env.REGISTRY_GCR }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.meta.outputs.tags }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+        
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.spdx.json
+        
+    - name: Image digest
+      run: echo ${{ steps.build.outputs.digest }}
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-and-push.outputs.image-tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [build-and-push, security-scan]
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    
+    steps:
+    - name: Notify on success
+      if: needs.build-and-push.result == 'success' && needs.security-scan.result == 'success'
+      run: |
+        echo "✅ Build and deployment completed successfully!"
+        echo "Image: ${{ needs.build-and-push.outputs.image-tag }}"
+        echo "Digest: ${{ needs.build-and-push.outputs.image-digest }}"
+        
+    - name: Notify on failure
+      if: needs.build-and-push.result == 'failure' || needs.security-scan.result == 'failure'
+      run: |
+        echo "❌ Build or deployment failed!"
+        echo "Build status: ${{ needs.build-and-push.result }}"
+        echo "Security scan status: ${{ needs.security-scan.result }}" 
