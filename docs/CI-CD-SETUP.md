@@ -54,6 +54,23 @@ By default, Docker Hub publishing is **disabled**. To enable it:
 
 **Note**: When `PUBLISH_TO_DOCKERHUB` is set to `true`, you must also configure the Docker Hub secrets (`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`).
 
+#### Registry Owners (Optional)
+
+You can configure different owners for different registries:
+
+1. Go to your GitHub repository
+2. Click on "Settings" → "Secrets and variables" → "Actions"
+3. Click on the "Variables" tab
+4. Click "New repository variable" for each setting:
+
+**Docker Hub Owner**:
+- **Name**: `DOCKERHUB_OWNER`
+- **Value**: `your-dockerhub-username` (default: `ravensorb`)
+
+**GitHub Container Registry Owner**:
+- **Name**: `GHCR_OWNER`
+- **Value**: `your-github-org` (default: `liquidlogiclabs`)
+
 ## Setting Up GitHub Secrets
 
 1. Go to your GitHub repository
@@ -102,9 +119,11 @@ ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1.0
 ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:1
 ```
 
-**Note**: The image names are configurable via environment variables:
+**Note**: The image names and owners are configurable via environment variables:
 - `IMAGE_NAME`: Full image name (e.g., `liquidlogiclabs/markdown-mermaidjs-to-pdf`)
 - `IMAGE_NAME_SHORT`: Short image name (e.g., `markdown-mermaidjs-to-pdf`)
+- `DOCKERHUB_OWNER`: Docker Hub organization/username (default: `ravensorb`)
+- `GHCR_OWNER`: GitHub Container Registry organization (default: `liquidlogiclabs`)
 
 ## Pipeline Jobs
 

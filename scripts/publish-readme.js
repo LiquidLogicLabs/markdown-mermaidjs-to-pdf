@@ -10,7 +10,8 @@ class ReadmePublisher {
     this.dockerhubUsername = process.env.DOCKERHUB_USERNAME;
     this.dockerhubToken = process.env.DOCKERHUB_TOKEN;
     this.githubToken = process.env.GITHUB_TOKEN;
-    this.repositoryOwner = process.env.GITHUB_REPOSITORY_OWNER || 'liquidlogiclabs';
+    this.dockerhubOwner = process.env.DOCKERHUB_OWNER || 'ravensorb';
+    this.ghcrOwner = process.env.GHCR_OWNER || 'liquidlogiclabs';
     this.imageName = process.env.IMAGE_NAME_SHORT || 'markdown-mermaidjs-to-pdf';
   }
 
@@ -65,7 +66,7 @@ class ReadmePublisher {
 
     console.log('Publishing README to Docker Hub...');
 
-    const url = `https://hub.docker.com/v2/repositories/${this.dockerhubUsername}/${this.imageName}/`;
+    const url = `https://hub.docker.com/v2/repositories/${this.dockerhubOwner}/${this.imageName}/`;
     const auth = Buffer.from(`${this.dockerhubUsername}:${this.dockerhubToken}`).toString('base64');
 
     const options = {
@@ -101,7 +102,7 @@ class ReadmePublisher {
 
     console.log('Publishing README to GitHub Container Registry...');
 
-    const url = `https://api.github.com/user/packages/container/${this.imageName}`;
+    const url = `https://api.github.com/orgs/${this.ghcrOwner}/packages/container/${this.imageName}`;
     
     const options = {
       method: 'PATCH',
