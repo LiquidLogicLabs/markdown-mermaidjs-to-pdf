@@ -2,7 +2,7 @@
 test/output*/
 test/data/output*/
 src/root/output*/
-data/output*/
+data/
 
 # Log files
 *.log

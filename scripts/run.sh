@@ -24,13 +24,13 @@ show_usage() {
     echo "  --build        Build Docker image before running"
     echo ""
     echo "Arguments:"
-    echo "  input_dir      Input directory with markdown files (default: ./input)"
-    echo "  output_dir     Output directory for PDF files (default: ./output)"
+    echo "  input_dir      Input directory with markdown files (default: ./samples)"
+    echo "  output_dir     Output directory for PDF files (default: ./data/output)"
     echo ""
     echo "Examples:"
     echo "  $0"
     echo "  $0 ./docs ./pdfs"
-    echo "  $0 -v ./input ./output"
+    echo "  $0 -v ./samples ./data/output"
     echo "  $0 --build"
 }
 
@@ -80,7 +80,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Set default directories
-INPUT_DIR=${INPUT_DIR:-"./data/input"}
+INPUT_DIR=${INPUT_DIR:-"./samples"}
 OUTPUT_DIR=${OUTPUT_DIR:-"./data/output"}
 LOG_DIR=${LOG_DIR:-"./data/logs"}
 
@@ -121,9 +121,13 @@ fi
 CONTAINER_CMD_ARR=($CONTAINER_CMD run --rm)
 
 # Add volume mounts
-CONTAINER_CMD_ARR+=(-v "$(realpath "$INPUT_DIR"):/data/input")
-CONTAINER_CMD_ARR+=(-v "$(realpath "$OUTPUT_DIR"):/data/output")
-CONTAINER_CMD_ARR+=(-v "$(realpath "$LOG_DIR"):/data/logs")
+# Use an array to build the docker command for simplicity and safety
+DOCKER_CMD_ARR=(docker run --rm)
+
+# Add volume mounts
+DOCKER_CMD_ARR+=(-v "$(cd "$INPUT_DIR" && pwd):/data/input")
+DOCKER_CMD_ARR+=(-v "$(cd "$OUTPUT_DIR" && pwd):/data/output")
+DOCKER_CMD_ARR+=(-v "$(cd "$LOG_DIR" && pwd):/data/logs")
 
 # Add environment variables
 if [ "$NO_LOGGING" = true ]; then

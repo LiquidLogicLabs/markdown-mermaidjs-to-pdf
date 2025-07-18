@@ -106,7 +106,7 @@ run_container() {
     echo -e "${YELLOW}Running container with: $CONTAINER_CMD${NC}"
     
     # Execute the container command with all arguments
-    $CONTAINER_CMD "${args[@]}"
+    $CONTAINER_CMD run "${args[@]}"
     return $?
 }
 

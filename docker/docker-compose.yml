@@ -13,8 +13,8 @@ services:
       - LOG_LEVEL=info
       - LOG_DIR=/app/logs
     volumes:
-      # Mount input and output directories
-      - ../data/input:/data/input
+      # Mount samples and output directories
+      - ../samples:/data/input
       - ../data/output:/data/output
       # Mount logs directory
       - ../data/logs:/data/logs

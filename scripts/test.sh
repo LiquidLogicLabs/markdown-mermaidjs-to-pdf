@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 IMAGE_NAME="liquidlogiclabs/markdown-mermaidjs-to-pdf:latest"
-SAMPLES_DIR="data/input"
+SAMPLES_DIR="samples"
 OUTPUT_DIR="data/output"
 LOG_DIR="data/logs"
 
@@ -33,14 +33,14 @@ echo -e "  Logs: $LOG_DIR_ABS"
 # Create output and log directories
 mkdir -p "$OUTPUT_DIR_ABS" "$LOG_DIR_ABS"
 
-# Check if input directory exists and has files
+# Check if samples directory exists and has files
 if [ ! -d "$SAMPLES_DIR_ABS" ]; then
-    echo -e "${RED}Error: Input directory does not exist: $SAMPLES_DIR_ABS${NC}"
+    echo -e "${RED}Error: Samples directory does not exist: $SAMPLES_DIR_ABS${NC}"
     exit 1
 fi
 
 if [ ! "$(ls -A "$SAMPLES_DIR_ABS"/*.md 2>/dev/null)" ]; then
-    echo -e "${RED}Error: No markdown files found in input directory: $SAMPLES_DIR_ABS${NC}"
+    echo -e "${RED}Error: No markdown files found in samples directory: $SAMPLES_DIR_ABS${NC}"
     exit 1
 fi
 
