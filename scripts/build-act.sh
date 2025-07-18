@@ -91,17 +91,26 @@ fi
 
 echo "🔧 Running act with proper container options..."
 
-# Build act command
 # Build act command as an argument array
 ACT_ARGS=(
   push
   --job "$JOB_NAME"
   --container-options "-v ${CURRENT_PATH}/data:/workspace/data"
-  --env PUBLISH_TO_DOCKERHUB=true
-  --env PUBLISH_TO_GHCR=true
-  --env DOCKERHUB_OWNER=ravensorb
-  --env GHCR_OWNER=liquidlogiclabs
 )
+
+# Only add env variables if they are defined
+if [[ -n "${PUBLISH_TO_DOCKERHUB}" ]]; then
+  ACT_ARGS+=(--env PUBLISH_TO_DOCKERHUB="${PUBLISH_TO_DOCKERHUB}")
+fi
+if [[ -n "${PUBLISH_TO_GHCR}" ]]; then
+  ACT_ARGS+=(--env PUBLISH_TO_GHCR="${PUBLISH_TO_GHCR}")
+fi
+if [[ -n "${DOCKERHUB_OWNER}" ]]; then
+  ACT_ARGS+=(--env DOCKERHUB_OWNER="${DOCKERHUB_OWNER}")
+fi
+if [[ -n "${GHCR_OWNER}" ]]; then
+  ACT_ARGS+=(--env GHCR_OWNER="${GHCR_OWNER}")
+fi
 
 # Add dryrun flag if specified
 if [[ "$DRYRUN" == "true" ]]; then

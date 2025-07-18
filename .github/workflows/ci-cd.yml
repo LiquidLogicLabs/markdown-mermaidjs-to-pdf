@@ -234,32 +234,16 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
-    - name: Publish README to Registries
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Push README to Docker Hub
+      if: env.PUBLISH_TO_DOCKERHUB == 'true'
+      uses: christian-korneck/update-container-description-action@v1
       env:
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-        PUBLISH_TO_DOCKERHUB: ${{ env.PUBLISH_TO_DOCKERHUB }}
-        IMAGE_NAME_SHORT: ${{ env.IMAGE_NAME_SHORT }}
-        DOCKERHUB_OWNER: ${{ env.DOCKERHUB_OWNER }}
-        GHCR_OWNER: ${{ env.GHCR_OWNER }}
-      run: |
-        node scripts/publish-readme.js
-        
-    - name: Publish README to Docker Hub (Alternative)
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: docker/metadata-action@v5
+        DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKER_PASS: ${{ secrets.DOCKERHUB_TOKEN }}
       with:
-        images: ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME_SHORT }}
-        flavor: |
-          latest=auto
-        labels: |
-          org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
-          org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/main/README.md
-        
-
+        destination_container_repo: ${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME_SHORT }}
+        provider: dockerhub
+        readme_file: ./README.md
         
     - name: Image digest
       run: echo ${{ steps.build-ghcr.outputs.digest }}

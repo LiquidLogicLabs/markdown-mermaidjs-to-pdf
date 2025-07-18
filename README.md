@@ -4,6 +4,8 @@ A Docker-based application that converts Markdown files with Mermaid diagrams to
 
 [![Docker Image](https://img.shields.io/badge/docker-liquidlogiclabs%2Fmarkdown--to--pdf-blue)](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![GitHub Repository](https://img.shields.io/badge/github-liquidlogiclabs%2Fmarkdown--mermaidjs--to--pdf-black)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf)
+[![Build Status](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions)
 
 ## 🚀 Quick Start
 
@@ -81,7 +83,7 @@ markdown-converter/
 ├── docker/               # Docker-related files
 ├── tests/                # Test files and samples
 ├── scripts/              # Utility scripts
-├── docs/                 # Documentation
+├── docs/                 # Additional documentation (if needed)
 ├── data/input/           # Input directory for markdown files (created by run script)
 ├── data/output/          # Output directory for PDF files (created by run script)
 ├── data/logs/            # Output directory for Log files
@@ -274,11 +276,10 @@ This will:
 
 ## 📖 Documentation
 
-For detailed documentation, see the [docs/](docs/) directory:
+This README contains comprehensive documentation for the project. For additional information:
 
-- [Complete Documentation](docs/README.md)
-- [API Reference](docs/API.md)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- **Docker Hub**: [Container Documentation](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
+- **GitHub**: [Source Code](https://github.com/liquidlogiclabs/markdown-converter)
 
 ## 🤝 Contributing
 
@@ -295,8 +296,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 For issues and questions:
-1. Check the [troubleshooting guide](docs/TROUBLESHOOTING.md)
-2. Review the log files
+1. Review the log files
+2. Check the troubleshooting section in this README
 3. Open an issue on GitHub
 
 ---
