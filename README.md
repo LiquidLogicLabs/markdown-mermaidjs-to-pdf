@@ -107,6 +107,7 @@ The application uses a simple directory structure:
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `LOG_DIR` | `logs` | Directory for log files |
 | `NODE_ENV` | `production` | Environment mode |
+| `MARKDOWN_MERMAIDJS_TO_PDF_DEBUG` | `false` | Enable debug overlay showing Mermaid diagram statistics |
 
 ### Local Development with Act
 

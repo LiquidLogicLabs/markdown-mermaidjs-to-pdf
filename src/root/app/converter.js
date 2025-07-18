@@ -459,25 +459,28 @@ class MarkdownConverter {
         durationFormatted: this.formatDuration(pdfTiming.mermaidLoad)
       });
 
-      // Add debug output to the page for troubleshooting
-      await this.page.evaluate(() => {
-        if (!document.getElementById('mermaid-debug-info')) {
-          const debugDiv = document.createElement('div');
-          debugDiv.id = 'mermaid-debug-info';
-          debugDiv.style = 'position:fixed;top:0;left:0;right:0;background:#fffbe6;color:#333;padding:8px 12px;font-size:14px;z-index:9999;border-bottom:1px solid #eee;box-shadow:0 2px 4px #0001;';
-          debugDiv.innerText = 'Mermaid: Waiting for diagrams to render...';
-          document.body.prepend(debugDiv);
-        }
-      });
+      // Add debug output to the page for troubleshooting (only if debug is enabled)
+      const debugEnabled = process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === '1' || process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === 'true';
+      if (debugEnabled) {
+        await this.page.evaluate(() => {
+          if (!document.getElementById('mermaid-debug-info')) {
+            const debugDiv = document.createElement('div');
+            debugDiv.id = 'mermaid-debug-info';
+            debugDiv.style = 'position:fixed;top:0;left:0;right:0;background:#fffbe6;color:#333;padding:8px 12px;font-size:14px;z-index:9999;border-bottom:1px solid #eee;box-shadow:0 2px 4px #0001;';
+            debugDiv.innerText = 'Mermaid: Waiting for diagrams to render...';
+            document.body.prepend(debugDiv);
+          }
+        });
+      }
 
       // Wait for Mermaid diagrams to render with a more lenient approach
       const diagramStartTime = Date.now();
       try {
-        await this.page.waitForFunction(() => {
+        await this.page.waitForFunction((debugEnabled) => {
           const diagrams = document.querySelectorAll('.mermaid-diagram');
           const debugDiv = document.getElementById('mermaid-debug-info');
           if (diagrams.length === 0) {
-            if (debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
+            if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
             return true;
           }
           let rendered = 0, failed = 0;
@@ -487,31 +490,35 @@ class MarkdownConverter {
             if (svg) {rendered++;}
             if (error) {failed++;}
           });
-          if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed...`;}
+          if (debugEnabled && debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed...`;}
           return diagrams.length === (rendered + failed);
-        }, { timeout: 120000 });
+        }, { timeout: 120000 }, debugEnabled);
       } catch (timeoutError) {
         // If timeout occurs, continue anyway and show what we have
         this.logger.warn('Mermaid rendering timeout, continuing with available diagrams');
-        await this.page.evaluate(() => {
-          const debugDiv = document.getElementById('mermaid-debug-info');
-          if (debugDiv) {debugDiv.innerText = 'Mermaid: Timeout occurred, showing available diagrams.';}
-        });
+        if (debugEnabled) {
+          await this.page.evaluate(() => {
+            const debugDiv = document.getElementById('mermaid-debug-info');
+            if (debugDiv) {debugDiv.innerText = 'Mermaid: Timeout occurred, showing available diagrams.';}
+          });
+        }
       }
 
-      // Update debug output to show final status
-      await this.page.evaluate(() => {
-        const diagrams = document.querySelectorAll('.mermaid-diagram');
-        const debugDiv = document.getElementById('mermaid-debug-info');
-        let rendered = 0, failed = 0;
-        diagrams.forEach(diagram => {
-          const svg = diagram.querySelector('svg');
-          const error = diagram.querySelector('div[style*="color: red"]');
-          if (svg) {rendered++;}
-          if (error) {failed++;}
+      // Update debug output to show final status (only if debug is enabled)
+      if (debugEnabled) {
+        await this.page.evaluate(() => {
+          const diagrams = document.querySelectorAll('.mermaid-diagram');
+          const debugDiv = document.getElementById('mermaid-debug-info');
+          let rendered = 0, failed = 0;
+          diagrams.forEach(diagram => {
+            const svg = diagram.querySelector('svg');
+            const error = diagram.querySelector('div[style*="color: red"]');
+            if (svg) {rendered++;}
+            if (error) {failed++;}
+          });
+          if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;}
         });
-        if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;}
-      });
+      }
       pdfTiming.diagramRender = Date.now() - diagramStartTime;
       this.logger.debug('Mermaid diagrams rendered', {
         duration: pdfTiming.diagramRender,
