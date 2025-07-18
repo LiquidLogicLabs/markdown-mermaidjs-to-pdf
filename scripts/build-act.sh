@@ -53,9 +53,9 @@ CURRENT_PATH=$(pwd)
 mkdir -p data/input data/output data/logs
 
 # Copy sample files if they exist
-if [ -d "tests/samples" ]; then
+if [ -d "samples" ]; then
   echo "📁 Copying sample files..."
-  cp tests/samples/*.md data/input/ 2>/dev/null || true
+  cp samples/*.md data/input/ 2>/dev/null || true
 fi
 
 # Create a simple test markdown if no samples exist

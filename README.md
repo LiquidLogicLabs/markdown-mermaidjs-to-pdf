@@ -81,19 +81,18 @@ The application uses a modular architecture:
 markdown-converter/
 ├── src/root/app/         # Application source code
 ├── docker/               # Docker-related files
-├── tests/                # Test files and samples
+├── tests/                # Test files
 ├── scripts/              # Utility scripts
 ├── docs/                 # Additional documentation (if needed)
-├── data/input/           # Input directory for markdown files (created by run script)
-├── data/output/          # Output directory for PDF files (created by run script)
-├── data/logs/            # Output directory for Log files
+├── samples/              # Sample markdown files for testing
 └── package.json          # Node.js dependencies
 ```
 
 ### Directory Structure
 
 The application uses a simple directory structure:
-- **Input Directory** (`/data/input` in container): Place your `.md` and `.markdown` files here
+- **Samples Directory** (`/samples`): Contains sample markdown files for testing
+- **Input Directory** (`/data/input` in container): Place your `.md` and `.markdown` files here (created automatically)
 - **Output Directory** (`/data/output` in container): Generated PDF files will be saved here
 - **Logs**: Application logs are stored in the `/data/logs/` directory
 
