@@ -44,9 +44,18 @@ if [ ! "$(ls -A "$SAMPLES_DIR_ABS"/*.md 2>/dev/null)" ]; then
     exit 1
 fi
 
-# Check if Docker image exists
-if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
-    echo -e "${YELLOW}Docker image not found. Building...${NC}"
+# Source the container runtime utility
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/container-runtime.sh"
+
+# Detect container runtime
+if ! detect_container_runtime; then
+    exit 1
+fi
+
+# Check if container image exists
+if ! image_exists "$IMAGE_NAME"; then
+    echo -e "${YELLOW}Container image not found. Building...${NC}"
     ./scripts/build.sh
 fi
 
@@ -59,7 +68,8 @@ test_batch_conversion() {
     
     # Run the converter with real-time output
     echo -e "${BLUE}Running converter (showing real-time output):${NC}"
-    docker run --rm \
+    echo -e "${YELLOW}Using container runtime: $CONTAINER_RUNTIME${NC}"
+    run_container --rm \
         -v "$SAMPLES_DIR_ABS:/data/input" \
         -v "$OUTPUT_DIR_ABS:/data/output" \
         -v "$LOG_DIR_ABS:/data/logs" \

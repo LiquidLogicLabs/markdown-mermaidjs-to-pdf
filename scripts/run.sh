@@ -95,57 +95,64 @@ fi
 [ ! -d "$OUTPUT_DIR" ] && mkdir -p "$OUTPUT_DIR"
 [ ! -d "$LOG_DIR" ] && mkdir -p "$LOG_DIR"
 
+# Source the container runtime utility
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/container-runtime.sh"
+
+# Detect container runtime
+if ! detect_container_runtime; then
+    exit 1
+fi
+
 # Build image if requested
 if [ "$BUILD_IMAGE" = true ]; then
-    echo -e "${YELLOW}Building Docker image...${NC}"
+    echo -e "${YELLOW}Building container image...${NC}"
     ./scripts/build.sh
 fi
 
-# Check if Docker image exists
-if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
-    echo -e "${YELLOW}Docker image not found. Building...${NC}"
+# Check if container image exists
+if ! image_exists "$IMAGE_NAME"; then
+    echo -e "${YELLOW}Container image not found. Building...${NC}"
     ./scripts/build.sh
 fi
 
-# Prepare Docker command
-DOCKER_CMD="docker run --rm"
+# Prepare container command
+# Use an array to build the container command for simplicity and safety
+CONTAINER_CMD_ARR=($CONTAINER_CMD run --rm)
 
 # Add volume mounts
-# Use an array to build the docker command for simplicity and safety
-DOCKER_CMD_ARR=(docker run --rm)
-
-# Add volume mounts
-DOCKER_CMD_ARR+=(-v "$(realpath "$INPUT_DIR"):/data/input")
-DOCKER_CMD_ARR+=(-v "$(realpath "$OUTPUT_DIR"):/data/output")
-DOCKER_CMD_ARR+=(-v "$(realpath "$LOG_DIR"):/data/logs")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$INPUT_DIR"):/data/input")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$OUTPUT_DIR"):/data/output")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$LOG_DIR"):/data/logs")
 
 # Add environment variables
 if [ "$NO_LOGGING" = true ]; then
-    DOCKER_CMD_ARR+=(-e LOGGING_ENABLED=false)
+    CONTAINER_CMD_ARR+=(-e LOGGING_ENABLED=false)
 else
-    DOCKER_CMD_ARR+=(-e LOGGING_ENABLED=true)
+    CONTAINER_CMD_ARR+=(-e LOGGING_ENABLED=true)
     if [ "$VERBOSE" = true ]; then
-        DOCKER_CMD_ARR+=(-e LOG_LEVEL=debug)
+        CONTAINER_CMD_ARR+=(-e LOG_LEVEL=debug)
     else
-        DOCKER_CMD_ARR+=(-e LOG_LEVEL=info)
+        CONTAINER_CMD_ARR+=(-e LOG_LEVEL=info)
     fi
 fi
 
 # Add image and command
-DOCKER_CMD_ARR+=("$IMAGE_NAME")
+CONTAINER_CMD_ARR+=("$IMAGE_NAME")
 
 # Add verbose flag if requested
 if [ "$VERBOSE" = true ]; then
-    DOCKER_CMD_ARR+=(-v)
+    CONTAINER_CMD_ARR+=(-v)
 fi
 
 # Run the converter
 echo -e "${BLUE}Running markdown-mermaidjs-to-pdf batch converter...${NC}"
 echo -e "${YELLOW}Input directory: $INPUT_DIR${NC}"
 echo -e "${YELLOW}Output directory: $OUTPUT_DIR${NC}"
+echo -e "${YELLOW}Container runtime: $CONTAINER_RUNTIME${NC}"
 
-# Join the array into a single string and execute
-eval "${DOCKER_CMD_ARR[*]}"
+# Execute the container command
+run_container "${CONTAINER_CMD_ARR[@]}"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Batch conversion completed successfully!${NC}"
