@@ -106,6 +106,139 @@ The application uses a simple directory structure:
 | `LOG_DIR` | `logs` | Directory for log files |
 | `NODE_ENV` | `production` | Environment mode |
 
+### Local Development with Act
+
+[Act](https://github.com/nektos/act) allows you to run GitHub Actions locally for testing and development. This is useful for testing the CI/CD pipeline before pushing changes.
+
+#### Prerequisites
+
+1. Install Act:
+   ```bash
+   # On macOS
+   brew install act
+   
+   # On Linux
+   curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+   
+   # On Windows (with Chocolatey)
+   choco install act-cli
+   ```
+
+2. Install Docker (required for Act)
+
+#### Configuration
+
+Create a `.actrc` file in your home directory (`~/.actrc`) or in your local repo folder with the following variables:
+
+```bash
+# Required secrets for Docker Hub authentication
+-DOCKERHUB_USERNAME=your_dockerhub_username
+-DOCKERHUB_TOKEN=your_dockerhub_token
+
+# Required secrets for GitHub Container Registry
+-GITHUB_TOKEN=your_github_token
+
+# Optional: GitHub variables (with defaults)
+-DOCKERHUB_OWNER=your_dockerhub_username
+-GHCR_OWNER=your_github_username
+
+# Control actual pushing behavior
+-PUBLISH_TO_DOCKERHUB=true
+-PUBLISH_TO_GHCR=true
+```
+
+#### Getting Required Tokens
+
+1. **Docker Hub Token**:
+   - Go to [Docker Hub Account Settings](https://hub.docker.com/settings/security)
+   - Create a new access token
+   - Use your Docker Hub username and the generated token
+
+2. **GitHub Token**:
+   - Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
+   - Generate a new token with `repo` and `write:packages` scopes
+   - Or use `GITHUB_TOKEN` if running in a GitHub Actions environment
+
+#### Push Control Variables
+
+- `PUBLISH_TO_DOCKERHUB`: Set to `false` to prevent pushing to Docker Hub
+- `PUBLISH_TO_GHCR`: Set to `false` to prevent pushing to GitHub Container Registry
+
+#### Pipeline Jobs
+
+The CI/CD pipeline consists of the following jobs:
+
+- **`test`**: Runs linting, unit tests, and Docker container tests
+  - Installs dependencies and runs `npm ci`
+  - Executes linting with `npm run lint`
+  - Runs tests with `npm test`
+  - Builds Docker image and tests it with sample files
+  - Verifies PDF generation works correctly
+
+- **`build-and-push`**: Builds and pushes Docker images to registries
+  - Requires the `test` job to pass first
+  - Builds multi-platform images (linux/amd64, linux/arm64)
+  - Pushes to Docker Hub (if `PUBLISH_TO_DOCKERHUB=true`)
+  - Pushes to GitHub Container Registry (if `PUBLISH_TO_GHCR=true`)
+  - Publishes README to registries on tag releases
+  - Outputs image tags and digests for downstream jobs
+
+- **`security-scan`**: Performs security scanning and generates SBOM
+  - Requires the `build-and-push` job to complete
+  - Runs Trivy vulnerability scanner on the built image
+  - Generates Software Bill of Materials (SBOM) in SPDX format
+  - Uploads scan results to GitHub Security tab
+  - Uploads SBOM as an artifact
+
+- **`notify`**: Provides pipeline completion notifications
+  - Runs after both `build-and-push` and `security-scan` complete
+  - Reports success or failure status
+  - Displays image tags and digests on success
+
+#### Running the Pipeline Locally
+
+```bash
+# Run the entire pipeline
+act push
+
+# Run only the test job
+act push -j test
+
+# Run only the build job (requires test to pass)
+act push -j build-and-push
+
+# Run with specific event
+act push -e .github/workflows/ci-cd.yml
+
+# Run with verbose output
+act push -v
+
+# Run with specific actor (GitHub username)
+act push --actor your-github-username
+```
+
+#### Testing Specific Scenarios
+
+```bash
+# Test a tag release
+act push --env GITHUB_REF=refs/tags/v1.0.0
+
+# Test main branch push
+act push --env GITHUB_REF=refs/heads/main
+
+# Test with custom event payload
+act push -e .github/workflows/ci-cd.yml --eventpath .github/events/push.json
+```
+
+#### Troubleshooting Act
+
+- **Docker permission issues**: Ensure your user is in the `docker` group
+- **Memory issues**: Increase Docker memory allocation in Docker Desktop
+- **Network issues**: Use `--container-daemon-socket` flag if needed
+- **Platform issues**: Use `--platform linux/amd64` for consistent behavior
+- **GHCR 403 errors**: Ensure `GITHUB_ACTOR` is set to your GitHub username and `GITHUB_TOKEN` has `write:packages` scope
+- **Docker Hub 403 errors**: Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are correct
+
 ### Docker Usage
 
 ```bash

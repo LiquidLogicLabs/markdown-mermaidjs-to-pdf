@@ -199,17 +199,11 @@ jobs:
         echo "GitHub ref: ${{ github.ref }}"
         echo "GitHub event: ${{ github.event_name }}"
         
-
-        
     - name: Build and push to Docker Hub
       id: build-dockerhub
       if: env.PUBLISH_TO_DOCKERHUB == 'true'
       run: |
-        if [[ "${{ env.SKIP_PUSH }}" == "true" ]]; then
-          echo "🔍 SKIP_PUSH=true - Building Docker Hub image without pushing"
-        else
-          echo "🚀 Building and pushing Docker Hub image"
-        fi
+        echo "🚀 Building and pushing Docker Hub image"
       
     - name: Build Docker Hub image
       uses: docker/build-push-action@v5
@@ -226,11 +220,7 @@ jobs:
     - name: Build and push to GHCR
       id: build-ghcr
       run: |
-        if [[ "${{ env.SKIP_PUSH }}" == "true" ]]; then
-          echo "🔍 SKIP_PUSH=true - Building GHCR image without pushing"
-        else
-          echo "🚀 Building and pushing GHCR image"
-        fi
+        echo "🚀 Building and pushing GHCR image"
       
     - name: Build GHCR image
       uses: docker/build-push-action@v5
@@ -344,16 +334,18 @@ jobs:
         fi
       
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@v0.18.4
+      uses: aquasecurity/trivy-action@0.32.0
       with:
         image-ref: ${{ steps.extract-security-tag.outputs.first-tag }}
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
         exit-code: '0'
-        # Force Docker runtime to avoid Podman issues
-        dockerfile: ./docker/Dockerfile
-        context: .
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        cache: 'true'
+        timeout: '10m'
+        hide-progress: 'false'
         
     - name: Check Trivy results
       run: |
