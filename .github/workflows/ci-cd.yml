@@ -306,9 +306,6 @@ jobs:
           # For releases, use the version tag
           VERSION_TAG=$(echo "${{ github.ref }}" | sed 's|refs/tags/||')
           SECURITY_TAG="${{ env.REGISTRY_GHCR }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:$VERSION_TAG"
-        else
-          # For main branch, use the version tag (from package.json)
-          SECURITY_TAG="${{ env.REGISTRY_GHCR }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME_SHORT }}:$(node -p "require('./package.json').version")"
         fi
         
         # Fallback to latest if version extraction fails
