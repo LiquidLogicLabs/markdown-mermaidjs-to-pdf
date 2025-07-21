@@ -23,11 +23,25 @@ fi
 
 # Build the container image
 IMAGE_NAME="liquidlogiclabs/markdown-mermaidjs-to-pdf:latest"
-if build_image "docker/Dockerfile" "$IMAGE_NAME" "."; then
-    echo -e "${GREEN}✓ Container image built successfully!${NC}"
-    echo -e "${GREEN}Image: $IMAGE_NAME${NC}"
-    echo -e "${GREEN}Runtime: $CONTAINER_RUNTIME${NC}"
+
+# For Podman, we need to use sudo for building due to rootless container limitations
+if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    echo -e "${YELLOW}Using Podman - attempting build with sudo (required for package installation)...${NC}"
+    if build_image "docker/Dockerfile" "$IMAGE_NAME" "."; then
+        echo -e "${GREEN}✓ Container image built successfully!${NC}"
+        echo -e "${GREEN}Image: $IMAGE_NAME${NC}"
+        echo -e "${GREEN}Runtime: $CONTAINER_RUNTIME${NC}"
+    else
+        echo -e "${RED}✗ Container build failed!${NC}"
+        exit 1
+    fi
 else
-    echo -e "${RED}✗ Container build failed!${NC}"
-    exit 1
+    if build_image "docker/Dockerfile" "$IMAGE_NAME" "."; then
+        echo -e "${GREEN}✓ Container image built successfully!${NC}"
+        echo -e "${GREEN}Image: $IMAGE_NAME${NC}"
+        echo -e "${GREEN}Runtime: $CONTAINER_RUNTIME${NC}"
+    else
+        echo -e "${RED}✗ Container build failed!${NC}"
+        exit 1
+    fi
 fi 

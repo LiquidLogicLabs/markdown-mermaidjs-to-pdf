@@ -1,4 +1,5 @@
 const fs = require('fs-extra');
+const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer');
 const { setupLogger } = require('./logger');
@@ -9,6 +10,7 @@ class MarkdownConverter {
     this.browser = null;
     this.page = null;
     this.mermaid = null;
+    this.currentFilename = null; // Track current file being processed
 
     // Configure Marked
     marked.setOptions({
@@ -72,7 +74,9 @@ class MarkdownConverter {
 
   async convertToPdf(inputPath, outputPath) {
     const conversionStartTime = Date.now();
-    this.logger.info('Starting conversion process', { inputPath, outputPath });
+    // Extract filename for logging context
+    this.currentFilename = path.basename(inputPath);
+    this.logger.info('Starting conversion process', { inputPath, outputPath, filename: this.currentFilename });
 
     const timing = {
       readFile: 0,
@@ -90,6 +94,7 @@ class MarkdownConverter {
       const markdownContent = await this.readMarkdownFile(inputPath);
       timing.readFile = Date.now() - readStartTime;
       this.logger.debug('Markdown file read successfully', {
+        filename: this.currentFilename,
         size: markdownContent.length,
         duration: timing.readFile,
         durationFormatted: this.formatDuration(timing.readFile)
@@ -100,6 +105,7 @@ class MarkdownConverter {
       const htmlContent = await this.processMarkdown(markdownContent);
       timing.processMarkdown = Date.now() - processStartTime;
       this.logger.debug('Markdown processed to HTML', {
+        filename: this.currentFilename,
         htmlSize: htmlContent.length,
         duration: timing.processMarkdown,
         durationFormatted: this.formatDuration(timing.processMarkdown)
@@ -110,6 +116,7 @@ class MarkdownConverter {
       await this.generatePdf(htmlContent, outputPath);
       timing.generatePdf = Date.now() - pdfStartTime;
       this.logger.debug('PDF generation completed', {
+        filename: this.currentFilename,
         outputPath,
         duration: timing.generatePdf,
         durationFormatted: this.formatDuration(timing.generatePdf)
@@ -117,6 +124,7 @@ class MarkdownConverter {
 
       timing.total = Date.now() - conversionStartTime;
       this.logger.info('Conversion completed successfully', {
+        filename: this.currentFilename,
         inputPath,
         outputPath,
         timing,
@@ -127,6 +135,7 @@ class MarkdownConverter {
     } catch (error) {
       timing.total = Date.now() - conversionStartTime;
       this.logger.error('Conversion failed', {
+        filename: this.currentFilename,
         error: error.message,
         stack: error.stack,
         timing,
@@ -140,28 +149,29 @@ class MarkdownConverter {
   }
 
   async readMarkdownFile(filePath) {
-    this.logger.debug('Reading markdown file', { filePath });
+    this.logger.debug('Reading markdown file', { filePath, filename: this.currentFilename });
 
     try {
       const content = await fs.readFile(filePath, 'utf8');
       this.logger.debug('Markdown file read successfully', {
+        filename: this.currentFilename,
         filePath,
         size: content.length,
         lines: content.split('\n').length
       });
       return content;
     } catch (error) {
-      this.logger.error('Failed to read markdown file', { filePath, error: error.message });
+      this.logger.error('Failed to read markdown file', { filename: this.currentFilename, filePath, error: error.message });
       throw new Error(`Failed to read markdown file: ${error.message}`);
     }
   }
 
   async processMarkdown(markdownContent) {
-    this.logger.debug('Processing markdown content');
+    this.logger.debug('Processing markdown content', { filename: this.currentFilename });
 
     // Extract Mermaid diagrams
     const mermaidDiagrams = this.extractMermaidDiagrams(markdownContent);
-    this.logger.debug('Extracted Mermaid diagrams', { count: mermaidDiagrams.length });
+    this.logger.debug('Extracted Mermaid diagrams', { filename: this.currentFilename, count: mermaidDiagrams.length });
 
     // Replace Mermaid code blocks with placeholders that will be rendered in browser
     let processedContent = markdownContent;
@@ -170,23 +180,24 @@ class MarkdownConverter {
       const placeholder = `\n\n<div class="mermaid-diagram" data-mermaid="${encodeURIComponent(diagram.code)}">\n<div class="mermaid-placeholder">Rendering diagram...</div>\n</div>\n\n`;
 
       processedContent = processedContent.replace(diagram.fullMatch, placeholder);
-      this.logger.debug('Replaced Mermaid diagram with placeholder', { index: i, type: diagram.type });
+      this.logger.debug('Replaced Mermaid diagram with placeholder', { filename: this.currentFilename, index: i, type: diagram.type });
     }
 
     // Convert markdown to HTML
     const htmlContent = marked(processedContent);
-    this.logger.debug('Markdown converted to HTML');
+    this.logger.debug('Markdown converted to HTML', { filename: this.currentFilename });
 
     // Wrap in complete HTML document with Mermaid script
     const fullHtml = this.wrapInHtmlDocument(htmlContent);
-    this.logger.debug('HTML wrapped in complete document');
+    this.logger.debug('HTML wrapped in complete document', { filename: this.currentFilename });
 
     return fullHtml;
   }
 
   extractMermaidDiagrams(markdownContent) {
     const diagrams = [];
-    const mermaidRegex = /```mermaid\s*\n([\s\S]*?)\n```/g;
+    // Support both standard mermaid syntax and pandoc syntax with attributes
+    const mermaidRegex = /```(?:mermaid|{[^}]*\.mermaid[^}]*})\s*\n([\s\S]*?)\n```/g;
     let match;
 
     while ((match = mermaidRegex.exec(markdownContent)) !== null) {
@@ -198,6 +209,7 @@ class MarkdownConverter {
     }
 
     this.logger.debug('Mermaid diagrams extracted', {
+      filename: this.currentFilename,
       count: diagrams.length,
       types: diagrams.map(d => d.type)
     });
@@ -406,7 +418,7 @@ class MarkdownConverter {
 
   async generatePdf(htmlContent, outputPath) {
     const pdfStartTime = Date.now();
-    this.logger.debug('Initializing browser for PDF generation');
+    this.logger.debug('Initializing browser for PDF generation', { filename: this.currentFilename });
 
     const pdfTiming = {
       browserInit: 0,
@@ -435,6 +447,7 @@ class MarkdownConverter {
       this.page = await this.browser.newPage();
       pdfTiming.browserInit = Date.now() - browserStartTime;
       this.logger.debug('Browser initialized', {
+        filename: this.currentFilename,
         duration: pdfTiming.browserInit,
         durationFormatted: this.formatDuration(pdfTiming.browserInit)
       });
@@ -444,6 +457,7 @@ class MarkdownConverter {
       await this.page.setContent(htmlContent, { waitUntil: 'networkidle0' });
       pdfTiming.contentSet = Date.now() - contentStartTime;
       this.logger.debug('HTML content set in page', {
+        filename: this.currentFilename,
         duration: pdfTiming.contentSet,
         durationFormatted: this.formatDuration(pdfTiming.contentSet)
       });
@@ -455,6 +469,7 @@ class MarkdownConverter {
       }, { timeout: 10000 });
       pdfTiming.mermaidLoad = Date.now() - mermaidLoadStartTime;
       this.logger.debug('Mermaid library loaded', {
+        filename: this.currentFilename,
         duration: pdfTiming.mermaidLoad,
         durationFormatted: this.formatDuration(pdfTiming.mermaidLoad)
       });
@@ -473,36 +488,64 @@ class MarkdownConverter {
         });
       }
 
-      // Wait for Mermaid diagrams to render with a more lenient approach
+      // Progressive Mermaid diagram rendering - render diagrams one by one
       const diagramStartTime = Date.now();
-      try {
-        await this.page.waitForFunction((debugEnabled) => {
-          const diagrams = document.querySelectorAll('.mermaid-diagram');
-          const debugDiv = document.getElementById('mermaid-debug-info');
-          if (diagrams.length === 0) {
-            if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
-            return true;
-          }
-          let rendered = 0, failed = 0;
-          diagrams.forEach(diagram => {
-            const svg = diagram.querySelector('svg');
-            const error = diagram.querySelector('div[style*="color: red"]');
-            if (svg) {rendered++;}
-            if (error) {failed++;}
-          });
-          if (debugEnabled && debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed...`;}
-          return diagrams.length === (rendered + failed);
-        }, { timeout: 120000 }, debugEnabled);
-      } catch (timeoutError) {
-        // If timeout occurs, continue anyway and show what we have
-        this.logger.warn('Mermaid rendering timeout, continuing with available diagrams');
-        if (debugEnabled) {
-          await this.page.evaluate(() => {
-            const debugDiv = document.getElementById('mermaid-debug-info');
-            if (debugDiv) {debugDiv.innerText = 'Mermaid: Timeout occurred, showing available diagrams.';}
-          });
+      const renderStatus = await this.page.evaluate(async (debugEnabled) => {
+        const diagrams = document.querySelectorAll('.mermaid-diagram');
+        const debugDiv = document.getElementById('mermaid-debug-info');
+        
+        if (diagrams.length === 0) {
+          if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
+          return { total: 0, rendered: 0, failed: 0 };
         }
-      }
+        
+        let rendered = 0, failed = 0;
+        
+        // Render each diagram individually
+        for (let i = 0; i < diagrams.length; i++) {
+          const diagram = diagrams[i];
+          const code = decodeURIComponent(diagram.getAttribute('data-mermaid'));
+          
+          if (debugEnabled && debugDiv) {
+            debugDiv.innerText = `Mermaid: Rendering diagram ${i + 1}/${diagrams.length}...`;
+          }
+          
+          try {
+            // Render the diagram
+            const result = await mermaid.render(`mermaid-${Date.now()}-${i}`, code);
+            diagram.innerHTML = result.svg;
+            rendered++;
+            
+            if (debugEnabled && debugDiv) {
+              debugDiv.innerText = `Mermaid: ${i + 1}/${diagrams.length} diagrams rendered successfully...`;
+            }
+          } catch (error) {
+            // Show error for this diagram
+            diagram.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ${error.message}</div>`;
+            failed++;
+            
+            if (debugEnabled && debugDiv) {
+              debugDiv.innerText = `Mermaid: Diagram ${i + 1} failed, continuing...`;
+            }
+          }
+          
+          // Small delay to prevent overwhelming the browser
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (debugEnabled && debugDiv) {
+          debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams processed (${rendered} rendered, ${failed} failed).`;
+        }
+        
+        return { total: diagrams.length, rendered, failed };
+      }, debugEnabled);
+      
+      this.logger.info('Progressive Mermaid rendering completed', {
+        filename: this.currentFilename,
+        totalDiagrams: renderStatus.total,
+        renderedDiagrams: renderStatus.rendered,
+        failedDiagrams: renderStatus.failed
+      });
 
       // Update debug output to show final status (only if debug is enabled)
       if (debugEnabled) {
@@ -521,6 +564,7 @@ class MarkdownConverter {
       }
       pdfTiming.diagramRender = Date.now() - diagramStartTime;
       this.logger.debug('Mermaid diagrams rendered', {
+        filename: this.currentFilename,
         duration: pdfTiming.diagramRender,
         durationFormatted: this.formatDuration(pdfTiming.diagramRender)
       });
@@ -540,12 +584,13 @@ class MarkdownConverter {
         displayHeaderFooter: false
       };
 
-      this.logger.debug('Generating PDF with options', pdfOptions);
+      this.logger.debug('Generating PDF with options', { filename: this.currentFilename, ...pdfOptions });
       await this.page.pdf(pdfOptions);
       pdfTiming.pdfGeneration = Date.now() - pdfGenStartTime;
 
       const totalPdfTime = Date.now() - pdfStartTime;
       this.logger.info('PDF generated successfully', {
+        filename: this.currentFilename,
         outputPath,
         pdfTiming,
         totalPdfTime,
@@ -555,6 +600,7 @@ class MarkdownConverter {
     } catch (error) {
       const totalPdfTime = Date.now() - pdfStartTime;
       this.logger.error('PDF generation failed', {
+        filename: this.currentFilename,
         error: error.message,
         stack: error.stack,
         pdfTiming,

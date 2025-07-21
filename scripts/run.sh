@@ -118,16 +118,12 @@ fi
 
 # Prepare container command
 # Use an array to build the container command for simplicity and safety
-CONTAINER_CMD_ARR=($CONTAINER_CMD run --rm)
+CONTAINER_CMD_ARR=(--rm)
 
 # Add volume mounts
-# Use an array to build the docker command for simplicity and safety
-DOCKER_CMD_ARR=(docker run --rm)
-
-# Add volume mounts
-DOCKER_CMD_ARR+=(-v "$(cd "$INPUT_DIR" && pwd):/data/input")
-DOCKER_CMD_ARR+=(-v "$(cd "$OUTPUT_DIR" && pwd):/data/output")
-DOCKER_CMD_ARR+=(-v "$(cd "$LOG_DIR" && pwd):/data/logs")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$INPUT_DIR"):/data/input")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$OUTPUT_DIR"):/data/output")
+CONTAINER_CMD_ARR+=(-v "$(realpath "$LOG_DIR"):/data/logs")
 
 # Add environment variables
 if [ "$NO_LOGGING" = true ]; then
