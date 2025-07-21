@@ -7,37 +7,14 @@ A Docker-based application that converts Markdown files with Mermaid diagrams to
 [![GitHub Repository](https://img.shields.io/badge/github-liquidlogiclabs%2Fmarkdown--mermaidjs--to--pdf-black)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf)
 [![Build Status](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions)
 
-## 🚀 Quick Start
+## 🎯 Purpose
 
-### Prerequisites
-- Docker installed and running
-
-### Installation & Testing
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd markdown-converter
-
-# Build the Docker image
-./scripts/build.sh
-
-# Test with sample files
-./scripts/test.sh
-```
-
-### Basic Usage
-
-```bash
-# Convert all markdown files in ./input to ./output
-./scripts/run.sh
-
-# Convert files from custom directories
-./scripts/run.sh ./docs ./pdfs
-
-# Enable verbose logging
-./scripts/run.sh -v ./data/input ./data/output
-```
+This application converts Markdown files containing Mermaid diagrams into professional PDF documents. It's designed for:
+- Technical documentation
+- Architecture diagrams
+- Process flows
+- API documentation
+- Any document requiring both text and visual diagrams
 
 ## ✨ Features
 
@@ -65,6 +42,104 @@ cd markdown-converter
 - ZenUML
 - Sankey Diagrams
 
+## 🚀 Quick Start with Docker
+
+### Prerequisites
+- Docker installed and running
+
+### Basic Usage
+
+```bash
+# Convert all markdown files in ./input to ./output
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Convert files from custom directories
+docker run --rm \
+  -v $(pwd)/docs:/data/input \
+  -v $(pwd)/pdfs:/data/output \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Enable verbose logging
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e LOG_LEVEL=debug \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+```
+
+## 📁 Directory Structure
+
+The application uses a simple directory structure:
+- **Input Directory** (`/data/input` in container): Place your `.md` and `.markdown` files here
+- **Output Directory** (`/data/output` in container): Generated PDF files will be saved here
+- **Logs**: Application logs are stored in the `/data/logs/` directory
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOGGING_ENABLED` | `true` | Enable or disable logging |
+| `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
+| `LOG_DIR` | `logs` | Directory for log files |
+| `NODE_ENV` | `production` | Environment mode |
+| `MARKDOWN_MERMAIDJS_TO_PDF_DEBUG` | `false` | Enable debug overlay showing Mermaid diagram statistics |
+
+## Development
+
+### Docker Usage Examples
+
+```bash
+# Build image locally
+docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
+
+# Run with custom log level
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e LOG_LEVEL=debug \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Run with debug mode enabled
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e MARKDOWN_MERMAIDJS_TO_PDF_DEBUG=true \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Disable logging
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e LOGGING_ENABLED=false \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+```
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+
+```bash
+./scripts/test.sh
+```
+
+This will:
+- Build the Docker image if needed
+- Convert all sample files to PDF
+- Validate the output files
+- Generate a test report
+
+## 📖 Documentation
+
+This README contains comprehensive documentation for the project. For additional information:
+
+- **Docker Hub**: [Container Documentation](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
+- **GitHub**: [Source Code](https://github.com/liquidlogiclabs/markdown-converter)
+
 ## 🏗️ Architecture
 
 The application uses a modular architecture:
@@ -88,25 +163,47 @@ markdown-converter/
 └── package.json          # Node.js dependencies
 ```
 
-### Directory Structure
+## 🛠️ Development
 
-The application uses a simple directory structure:
-- **Samples Directory** (`/samples`): Contains sample markdown files for testing
-- **Input Directory** (`/data/input` in container): Place your `.md` and `.markdown` files here (created automatically)
-- **Output Directory** (`/data/output` in container): Generated PDF files will be saved here
-- **Logs**: Application logs are stored in the `/data/logs/` directory
+### Local Development Setup
 
-## 🔧 Configuration
+```bash
+# Clone the repository
+git clone <repository-url>
+cd markdown-converter
 
-### Environment Variables
+# Install dependencies
+npm install
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOGGING_ENABLED` | `true` | Enable or disable logging |
-| `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
-| `LOG_DIR` | `logs` | Directory for log files |
-| `NODE_ENV` | `production` | Environment mode |
-| `MARKDOWN_MERMAIDJS_TO_PDF_DEBUG` | `false` | Enable debug overlay showing Mermaid diagram statistics |
+# Run linting
+npm run lint
+
+# Run tests
+npm test
+
+# Start development mode
+npm run dev
+```
+
+### Using the Convenience Scripts
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd markdown-converter
+
+# Build the Docker image
+./scripts/build.sh
+
+# Run batch conversion
+./scripts/run.sh
+
+# Convert files from custom directories
+./scripts/run.sh ./docs ./pdfs
+
+# Enable verbose logging
+./scripts/run.sh -v ./data/input ./data/output
+```
 
 ### Local Development with Act
 
@@ -240,46 +337,6 @@ act push -e .github/workflows/ci-cd.yml --eventpath .github/events/push.json
 - **Platform issues**: Use `--platform linux/amd64` for consistent behavior
 - **GHCR 403 errors**: Ensure `GITHUB_ACTOR` is set to your GitHub username and `GITHUB_TOKEN` has `write:packages` scope
 - **Docker Hub 403 errors**: Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are correct
-
-### Docker Usage
-
-```bash
-# Build image
-docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
-
-# Run batch conversion (processes all .md files in input directory)
-docker run --rm \
-  -v $(pwd)/data/input:/data/input \
-  -v $(pwd)/data/output:/data/output \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
-
-# Run with custom directories
-docker run --rm \
-  -v $(pwd)/docs:/data/input \
-  -v $(pwd)/pdfs:/data/output \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
-```
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
-
-```bash
-./scripts/test.sh
-```
-
-This will:
-- Build the Docker image if needed
-- Convert all sample files to PDF
-- Validate the output files
-- Generate a test report
-
-## 📖 Documentation
-
-This README contains comprehensive documentation for the project. For additional information:
-
-- **Docker Hub**: [Container Documentation](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
-- **GitHub**: [Source Code](https://github.com/liquidlogiclabs/markdown-converter)
 
 ## 🤝 Contributing
 
