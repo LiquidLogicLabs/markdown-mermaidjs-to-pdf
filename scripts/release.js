@@ -31,14 +31,14 @@ class ReleaseManager {
 
   parseArguments() {
     const args = process.argv.slice(2);
-    
+
     if (args.length === 0) {
       this.showUsage();
       process.exit(1);
     }
 
     this.releaseType = args[0].toLowerCase();
-    
+
     if (!['major', 'minor', 'patch', 'premajor', 'preminor', 'prepatch', 'prerelease'].includes(this.releaseType)) {
       console.error(chalk.red(`Invalid release type: ${this.releaseType}`));
       this.showUsage();
@@ -47,10 +47,10 @@ class ReleaseManager {
 
     // Check for dry-run flag
     this.dryRun = args.includes('--dry-run') || args.includes('-d');
-    
+
     // Check for skip-tests flag
     this.skipTests = args.includes('--skip-tests') || args.includes('-s');
-    
+
     // Check for force flag
     this.force = args.includes('--force') || args.includes('-f');
   }
@@ -84,37 +84,37 @@ Examples:
 
   calculateNewVersion() {
     const [major, minor, patch] = this.currentVersion.split('.').map(Number);
-    
+
     switch (this.releaseType) {
-      case 'major':
-        this.newVersion = `${major + 1}.0.0`;
-        break;
-      case 'minor':
-        this.newVersion = `${major}.${minor + 1}.0`;
-        break;
-      case 'patch':
-        this.newVersion = `${major}.${minor}.${patch + 1}`;
-        break;
-      case 'premajor':
-        this.newVersion = `${major + 1}.0.0-0`;
-        break;
-      case 'preminor':
-        this.newVersion = `${major}.${minor + 1}.0-0`;
-        break;
-      case 'prepatch':
+    case 'major':
+      this.newVersion = `${major + 1}.0.0`;
+      break;
+    case 'minor':
+      this.newVersion = `${major}.${minor + 1}.0`;
+      break;
+    case 'patch':
+      this.newVersion = `${major}.${minor}.${patch + 1}`;
+      break;
+    case 'premajor':
+      this.newVersion = `${major + 1}.0.0-0`;
+      break;
+    case 'preminor':
+      this.newVersion = `${major}.${minor + 1}.0-0`;
+      break;
+    case 'prepatch':
+      this.newVersion = `${major}.${minor}.${patch + 1}-0`;
+      break;
+    case 'prerelease':
+      if (this.currentVersion.includes('-')) {
+        const [baseVersion, prerelease] = this.currentVersion.split('-');
+        const prereleaseNum = parseInt(prerelease) || 0;
+        this.newVersion = `${baseVersion}-${prereleaseNum + 1}`;
+      } else {
         this.newVersion = `${major}.${minor}.${patch + 1}-0`;
-        break;
-      case 'prerelease':
-        if (this.currentVersion.includes('-')) {
-          const [baseVersion, prerelease] = this.currentVersion.split('-');
-          const prereleaseNum = parseInt(prerelease) || 0;
-          this.newVersion = `${baseVersion}-${prereleaseNum + 1}`;
-        } else {
-          this.newVersion = `${major}.${minor}.${patch + 1}-0`;
-        }
-        break;
+      }
+      break;
     }
-    
+
     console.log(chalk.green(`New version: ${this.newVersion}`));
   }
 
@@ -139,7 +139,7 @@ Examples:
     }
 
     console.log(chalk.blue('Running tests...'));
-    
+
     try {
       // Run npm tests
       execSync('npm test', { stdio: 'inherit' });
@@ -157,9 +157,9 @@ Examples:
 
   async updatePackageJson() {
     console.log(chalk.blue('Updating package.json...'));
-    
+
     this.packageJson.version = this.newVersion;
-    
+
     if (this.dryRun) {
       console.log(chalk.yellow(`[DRY RUN] Would update package.json version to ${this.newVersion}`));
     } else {
@@ -170,16 +170,16 @@ Examples:
 
   async updateDockerfile() {
     console.log(chalk.blue('Updating Dockerfile labels...'));
-    
+
     try {
       let dockerfileContent = await fs.promises.readFile(DOCKERFILE_PATH, 'utf8');
-      
+
       // Update version label
       dockerfileContent = dockerfileContent.replace(
         /LABEL org\.opencontainers\.image\.version=.*/,
         `LABEL org.opencontainers.image.version=${this.newVersion}`
       );
-      
+
       if (this.dryRun) {
         console.log(chalk.yellow(`[DRY RUN] Would update Dockerfile version label to ${this.newVersion}`));
       } else {
@@ -188,7 +188,7 @@ Examples:
       }
     } catch (error) {
       console.error(chalk.red('Error updating Dockerfile:', error.message));
-      if (!this.force) process.exit(1);
+      if (!this.force) {process.exit(1);}
     }
   }
 
@@ -199,7 +199,7 @@ Examples:
     }
 
     console.log(chalk.blue('Committing changes...'));
-    
+
     try {
       execSync('git add package.json docker/Dockerfile', { stdio: 'inherit' });
       execSync(`git commit -m "chore: bump version to ${this.newVersion}"`, { stdio: 'inherit' });
@@ -212,14 +212,14 @@ Examples:
 
   async createTag() {
     const tagName = `v${this.newVersion}`;
-    
+
     if (this.dryRun) {
       console.log(chalk.yellow(`[DRY RUN] Would create tag: ${tagName}`));
       return;
     }
 
     console.log(chalk.blue(`Creating tag: ${tagName}`));
-    
+
     try {
       execSync(`git tag ${tagName}`, { stdio: 'inherit' });
       console.log(chalk.green(`✓ Created tag: ${tagName}`));
@@ -236,7 +236,7 @@ Examples:
     }
 
     console.log(chalk.blue('Pushing changes and tags...'));
-    
+
     try {
       execSync('git push origin main', { stdio: 'inherit' });
       execSync('git push origin --tags', { stdio: 'inherit' });
@@ -251,7 +251,7 @@ Examples:
     console.log(chalk.blue('\n🎉 Release completed successfully!'));
     console.log(chalk.green(`Version: ${this.newVersion}`));
     console.log(chalk.green(`Tag: v${this.newVersion}`));
-    
+
     if (!this.dryRun) {
       console.log(chalk.yellow('\nNext steps:'));
       console.log(chalk.yellow('1. GitHub Actions will automatically build and publish the new version'));
@@ -268,15 +268,15 @@ Examples:
       await this.init();
       this.parseArguments();
       this.calculateNewVersion();
-      
+
       console.log(chalk.blue(`\n🚀 Starting ${this.releaseType} release...`));
       console.log(chalk.blue(`Current version: ${this.currentVersion}`));
       console.log(chalk.blue(`New version: ${this.newVersion}`));
-      
+
       if (this.dryRun) {
         console.log(chalk.yellow('\n[DRY RUN MODE] - No changes will be made'));
       }
-      
+
       this.checkWorkingDirectory();
       await this.runTests();
       await this.updatePackageJson();
@@ -285,7 +285,7 @@ Examples:
       await this.createTag();
       await this.pushChanges();
       this.showNextSteps();
-      
+
     } catch (error) {
       console.error(chalk.red('Release failed:', error.message));
       process.exit(1);
@@ -295,4 +295,4 @@ Examples:
 
 // Run the release manager
 const releaseManager = new ReleaseManager();
-releaseManager.run(); 
+releaseManager.run();

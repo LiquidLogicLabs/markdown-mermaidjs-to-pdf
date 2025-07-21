@@ -32,7 +32,7 @@ describe('Logger', () => {
 
   test('should log messages without throwing errors', () => {
     logger = setupLogger();
-    
+
     // These should not throw errors
     expect(() => {
       logger.info('Test info message');
@@ -43,7 +43,7 @@ describe('Logger', () => {
 
   test('should handle timing information in meta', () => {
     logger = setupLogger();
-    
+
     const meta = {
       duration: 1500,
       timing: {
@@ -61,7 +61,7 @@ describe('Logger', () => {
 
   test('should handle PDF timing information', () => {
     logger = setupLogger();
-    
+
     const meta = {
       pdfTiming: {
         browserInit: 500,
@@ -77,4 +77,4 @@ describe('Logger', () => {
       logger.info('PDF generation completed', meta);
     }).not.toThrow();
   });
-}); 
+});

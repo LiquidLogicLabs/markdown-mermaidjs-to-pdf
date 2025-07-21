@@ -493,29 +493,29 @@ class MarkdownConverter {
       const renderStatus = await this.page.evaluate(async (debugEnabled) => {
         const diagrams = document.querySelectorAll('.mermaid-diagram');
         const debugDiv = document.getElementById('mermaid-debug-info');
-        
+
         if (diagrams.length === 0) {
           if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
           return { total: 0, rendered: 0, failed: 0 };
         }
-        
+
         let rendered = 0, failed = 0;
-        
+
         // Render each diagram individually
         for (let i = 0; i < diagrams.length; i++) {
           const diagram = diagrams[i];
           const code = decodeURIComponent(diagram.getAttribute('data-mermaid'));
-          
+
           if (debugEnabled && debugDiv) {
             debugDiv.innerText = `Mermaid: Rendering diagram ${i + 1}/${diagrams.length}...`;
           }
-          
+
           try {
             // Render the diagram
-            const result = await mermaid.render(`mermaid-${Date.now()}-${i}`, code);
+            const result = await window.mermaid.render(`mermaid-${Date.now()}-${i}`, code);
             diagram.innerHTML = result.svg;
             rendered++;
-            
+
             if (debugEnabled && debugDiv) {
               debugDiv.innerText = `Mermaid: ${i + 1}/${diagrams.length} diagrams rendered successfully...`;
             }
@@ -523,23 +523,23 @@ class MarkdownConverter {
             // Show error for this diagram
             diagram.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ${error.message}</div>`;
             failed++;
-            
+
             if (debugEnabled && debugDiv) {
               debugDiv.innerText = `Mermaid: Diagram ${i + 1} failed, continuing...`;
             }
           }
-          
+
           // Small delay to prevent overwhelming the browser
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
+
         if (debugEnabled && debugDiv) {
           debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams processed (${rendered} rendered, ${failed} failed).`;
         }
-        
+
         return { total: diagrams.length, rendered, failed };
       }, debugEnabled);
-      
+
       this.logger.info('Progressive Mermaid rendering completed', {
         filename: this.currentFilename,
         totalDiagrams: renderStatus.total,
