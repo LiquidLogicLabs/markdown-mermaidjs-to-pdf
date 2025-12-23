@@ -14,7 +14,7 @@ class MarkdownConverter {
 
     // Configure Marked
     marked.setOptions({
-      breaks: true,
+      breaks: false,
       gfm: true
     });
 
