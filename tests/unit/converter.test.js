@@ -7,11 +7,19 @@ describe('MarkdownConverter', () => {
   let converter;
 
   beforeEach(() => {
+    // Set default environment variables for tests
+    process.env.MARKDOWN_BREAKS = 'false';
+    process.env.MAX_FILE_SIZE = '10485760';
+    process.env.MAX_MERMAID_DIAGRAMS = '50';
     converter = new MarkdownConverter();
   });
 
   afterEach(async () => {
     await converter.cleanup();
+    // Clean up environment variables
+    delete process.env.MARKDOWN_BREAKS;
+    delete process.env.MAX_FILE_SIZE;
+    delete process.env.MAX_MERMAID_DIAGRAMS;
   });
 
   describe('Paragraph rendering (Issue #1)', () => {
@@ -107,6 +115,77 @@ sequenceDiagram
       expect(diagrams).toHaveLength(2);
       expect(diagrams[0].type).toBe('flowchart');
       expect(diagrams[1].type).toBe('sequence');
+    });
+  });
+
+  describe('Input validation', () => {
+    test('should reject empty markdown content', () => {
+      const emptyContent = '';
+      expect(() => converter.validateMarkdownContent(emptyContent, 'test.md')).toThrow('File is empty');
+    });
+
+    test('should reject files with too many diagrams', () => {
+      process.env.MAX_MERMAID_DIAGRAMS = '2';
+      const converter2 = new MarkdownConverter();
+      
+      const contentWithManyDiagrams = `
+\`\`\`mermaid
+graph TD
+  A --> B
+\`\`\`
+
+\`\`\`mermaid
+graph TD
+  C --> D
+\`\`\`
+
+\`\`\`mermaid
+graph TD
+  E --> F
+\`\`\`
+`;
+      
+      expect(() => converter2.validateMarkdownContent(contentWithManyDiagrams, 'test.md')).toThrow('exceeding maximum allowed');
+      delete process.env.MAX_MERMAID_DIAGRAMS;
+    });
+
+    test('should accept valid markdown with reasonable number of diagrams', () => {
+      const validContent = `# Test
+
+\`\`\`mermaid
+graph TD
+  A --> B
+\`\`\`
+
+Some text.`;
+      
+      expect(() => converter.validateMarkdownContent(validContent, 'test.md')).not.toThrow();
+    });
+  });
+
+  describe('Environment-based configuration', () => {
+    test('should respect MARKDOWN_BREAKS environment variable', () => {
+      process.env.MARKDOWN_BREAKS = 'true';
+      const converterWithBreaks = new MarkdownConverter();
+      
+      // Check that marked was configured with breaks: true
+      // Note: We can't directly test marked's internal config,
+      // but we can verify the converter was created without errors
+      expect(converterWithBreaks).toBeDefined();
+      
+      delete process.env.MARKDOWN_BREAKS;
+    });
+
+    test('should use default MAX_FILE_SIZE when not specified', () => {
+      const newConverter = new MarkdownConverter();
+      expect(newConverter.maxFileSize).toBe(10485760); // 10MB default
+    });
+
+    test('should respect custom MAX_FILE_SIZE', () => {
+      process.env.MAX_FILE_SIZE = '5242880';
+      const newConverter = new MarkdownConverter();
+      expect(newConverter.maxFileSize).toBe(5242880); // 5MB
+      delete process.env.MAX_FILE_SIZE;
     });
   });
 

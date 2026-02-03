@@ -168,6 +168,14 @@ Each input file produces a PDF with the same base name: `guide.md` becomes `guid
 | `LOG_DIR` | `logs` | Directory for log files |
 | `NODE_ENV` | `production` | Environment mode |
 | `MARKDOWN_MERMAIDJS_TO_PDF_DEBUG` | `false` | Enable debug overlay showing Mermaid diagram statistics |
+| `MAX_FILE_SIZE` | `10485760` | Maximum file size in bytes (default: 10MB) |
+| `MAX_MERMAID_DIAGRAMS` | `50` | Maximum number of Mermaid diagrams per file |
+| `MARKDOWN_BREAKS` | `false` | Treat single newlines as line breaks in paragraphs |
+| `PDF_FORMAT` | `A4` | PDF page format (A4, Letter, Legal, etc.) |
+| `PDF_MARGIN_TOP` | `1in` | PDF top margin |
+| `PDF_MARGIN_RIGHT` | `1in` | PDF right margin |
+| `PDF_MARGIN_BOTTOM` | `1in` | PDF bottom margin |
+| `PDF_MARGIN_LEFT` | `1in` | PDF left margin |
 
 ## YAML Front Matter
 
@@ -198,7 +206,53 @@ Front matter is always stripped from the visible document content. It is used in
 With `--front-matter styled`, a formatted title block is rendered at the top of the PDF:
 
 ```bash
-markdown-mermaidjs-to-pdf -i ./docs -o ./pdfs --front-matter styled
+# Build image locally
+docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
+
+# Run with custom log level
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e LOG_LEVEL=debug \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Run with debug mode enabled
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e MARKDOWN_MERMAIDJS_TO_PDF_DEBUG=true \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Disable logging
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e LOGGING_ENABLED=false \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Custom PDF margins and format (Letter size with custom margins)
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e PDF_FORMAT=Letter \
+  -e PDF_MARGIN_TOP=0.5in \
+  -e PDF_MARGIN_BOTTOM=0.5in \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Increase file size limit for large documents
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e MAX_FILE_SIZE=20971520 \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Enable markdown line breaks and increase diagram limit
+docker run --rm \
+  -v $(pwd)/data/input:/data/input \
+  -v $(pwd)/data/output:/data/output \
+  -e MARKDOWN_BREAKS=true \
+  -e MAX_MERMAID_DIAGRAMS=100 \
+  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 ```
 
 This displays the title as a large heading, followed by the description, author, and date in a styled header block separated from the document content by a divider.

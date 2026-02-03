@@ -71,13 +71,18 @@ class MarkdownConverter {
     this.page = null;
     this.currentFilename = null;
     this.frontMatterMode = options.frontMatterMode || 'none';
-
+    this.maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '10485760', 10); // 10MB default
     marked.setOptions({
-      breaks: false,
+      breaks: process.env.MARKDOWN_BREAKS === 'true',
       gfm: true
     });
 
     this.logger.info('MarkdownConverter initialized', { frontMatterMode: this.frontMatterMode });
+    this.logger.info('MarkdownConverter initialized', {
+      frontMatterMode: this.frontMatterMode,
+      maxFileSize: this.maxFileSize,
+      markdownBreaks: process.env.MARKDOWN_BREAKS === 'true'
+    });
   }
 
   // Timing utility function
@@ -89,6 +94,25 @@ class MarkdownConverter {
     return `${minutes}m ${seconds}s`;
   }
 
+  async initializeBrowser() {
+    if (!this.browser) {
+      this.logger.debug('Initializing browser');
+      this.browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu'
+        ]
+      });
+      this.logger.debug('Browser initialized successfully');
+    }
+  }
+
   async convertToPdf(inputPath, outputPath) {
     const conversionStartTime = Date.now();
     // Extract filename for logging context
@@ -97,21 +121,31 @@ class MarkdownConverter {
 
     const timing = {
       readFile: 0,
+      validateFile: 0,
       processMarkdown: 0,
       generatePdf: 0,
       total: 0
     };
 
     try {
-      // Read markdown file
+      // Initialize browser (reused across conversions)
+      await this.initializeBrowser();
+
+      // Read and validate markdown file
       const readStartTime = Date.now();
       const markdownContent = await this.readMarkdownFile(inputPath);
       timing.readFile = Date.now() - readStartTime;
-      this.logger.debug('Markdown file read successfully', {
+
+      const validateStartTime = Date.now();
+      this.validateMarkdownContent(markdownContent, inputPath);
+      timing.validateFile = Date.now() - validateStartTime;
+
+      this.logger.debug('Markdown file read and validated', {
         filename: this.currentFilename,
         size: markdownContent.length,
-        duration: timing.readFile,
-        durationFormatted: this.formatDuration(timing.readFile)
+        readDuration: timing.readFile,
+        validateDuration: timing.validateFile,
+        durationFormatted: this.formatDuration(timing.readFile + timing.validateFile)
       });
 
       // Process markdown and render Mermaid diagrams
@@ -159,7 +193,7 @@ class MarkdownConverter {
       });
       throw error;
     } finally {
-      await this.cleanup();
+      await this.cleanupPage();
     }
   }
 
@@ -167,6 +201,12 @@ class MarkdownConverter {
     this.logger.debug('Reading markdown file', { filePath, filename: this.currentFilename });
 
     try {
+      // Check file size before reading
+      const stats = await fs.stat(filePath);
+      if (stats.size > this.maxFileSize) {
+        throw new Error(`File size (${stats.size} bytes) exceeds maximum allowed size (${this.maxFileSize} bytes)`);
+      }
+
       const content = await fs.readFile(filePath, 'utf8');
       this.logger.debug('Markdown file read successfully', {
         filename: this.currentFilename,
@@ -179,6 +219,38 @@ class MarkdownConverter {
       this.logger.error('Failed to read markdown file', { filename: this.currentFilename, filePath, error: error.message });
       throw new Error(`Failed to read markdown file: ${error.message}`);
     }
+  }
+
+  validateMarkdownContent(content, filePath) {
+    this.logger.debug('Validating markdown content', { filename: this.currentFilename });
+
+    // Check for empty content
+    if (!content || content.trim().length === 0) {
+      throw new Error(`File is empty: ${filePath}`);
+    }
+
+    // Check for suspiciously large number of diagrams (potential DoS)
+    const diagrams = this.extractMermaidDiagrams(content);
+    const maxDiagrams = parseInt(process.env.MAX_MERMAID_DIAGRAMS || '50', 10);
+    if (diagrams.length > maxDiagrams) {
+      throw new Error(`File contains ${diagrams.length} Mermaid diagrams, exceeding maximum allowed (${maxDiagrams})`);
+    }
+
+    // Warn about very large diagrams
+    diagrams.forEach((diagram, index) => {
+      if (diagram.code.length > 10000) {
+        this.logger.warn('Large Mermaid diagram detected', {
+          filename: this.currentFilename,
+          diagramIndex: index,
+          diagramSize: diagram.code.length
+        });
+      }
+    });
+
+    this.logger.debug('Markdown content validated', {
+      filename: this.currentFilename,
+      diagramCount: diagrams.length
+    });
   }
 
   async processMarkdown(markdownContent) {
@@ -513,10 +585,10 @@ class MarkdownConverter {
 
   async generatePdf(htmlContent, outputPath, frontMatter = {}) {
     const pdfStartTime = Date.now();
-    this.logger.debug('Initializing browser for PDF generation', { filename: this.currentFilename });
+    this.logger.debug('Creating new page for PDF generation', { filename: this.currentFilename });
 
     const pdfTiming = {
-      browserInit: 0,
+      pageCreate: 0,
       contentSet: 0,
       mermaidLoad: 0,
       diagramRender: 0,
@@ -525,28 +597,14 @@ class MarkdownConverter {
     };
 
     try {
-      // Launch browser
-      const browserStartTime = Date.now();
-      this.browser = await puppeteer.launch({
-        executablePath: findChromiumExecutable(),
-        headless: 'new',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
-        ]
-      });
-
+      // Create a new page for this conversion
+      const pageStartTime = Date.now();
       this.page = await this.browser.newPage();
-      pdfTiming.browserInit = Date.now() - browserStartTime;
-      this.logger.debug('Browser initialized', {
+      pdfTiming.pageCreate = Date.now() - pageStartTime;
+      this.logger.debug('Page created', {
         filename: this.currentFilename,
-        duration: pdfTiming.browserInit,
-        durationFormatted: this.formatDuration(pdfTiming.browserInit)
+        duration: pdfTiming.pageCreate,
+        durationFormatted: this.formatDuration(pdfTiming.pageCreate)
       });
 
       // Set content and wait for any dynamic content
@@ -666,16 +724,16 @@ class MarkdownConverter {
         durationFormatted: this.formatDuration(pdfTiming.diagramRender)
       });
 
-      // Generate PDF
+      // Generate PDF with configurable options
       const pdfGenStartTime = Date.now();
       const pdfOptions = {
         path: outputPath,
-        format: 'A4',
+        format: process.env.PDF_FORMAT || 'A4',
         margin: {
-          top: '1in',
-          right: '1in',
-          bottom: '1in',
-          left: '1in'
+          top: process.env.PDF_MARGIN_TOP || '1in',
+          right: process.env.PDF_MARGIN_RIGHT || '1in',
+          bottom: process.env.PDF_MARGIN_BOTTOM || '1in',
+          left: process.env.PDF_MARGIN_LEFT || '1in'
         },
         printBackground: true,
         displayHeaderFooter: false,
@@ -780,21 +838,29 @@ class MarkdownConverter {
     }
   }
 
-  async cleanup() {
-    this.logger.debug('Cleaning up resources');
+  async cleanupPage() {
+    this.logger.debug('Cleaning up page resources');
 
     if (this.page) {
       try {
         await this.page.close();
+        this.page = null;
         this.logger.debug('Page closed');
       } catch (error) {
         this.logger.warn('Error closing page', { error: error.message });
       }
     }
+  }
+
+  async cleanup() {
+    this.logger.debug('Cleaning up all resources');
+
+    await this.cleanupPage();
 
     if (this.browser) {
       try {
         await this.browser.close();
+        this.browser = null;
         this.logger.debug('Browser closed');
       } catch (error) {
         this.logger.warn('Error closing browser', { error: error.message });

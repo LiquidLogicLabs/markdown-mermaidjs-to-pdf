@@ -71,3 +71,7 @@ coverage/
 
 # BMAD framework
 _bmad/
+
+# Output and artifacts
+out/
+test-output/

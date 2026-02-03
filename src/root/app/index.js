@@ -102,46 +102,52 @@ async function main() {
     let errorCount = 0;
     const conversionTimes = [];
 
-    for (const file of markdownFiles) {
-      const fileStartTime = Date.now();
-      const inputPath = path.join(inputDir, file);
-      const outputFile = file.replace(/\.(md|markdown)$/i, '.pdf');
-      const outputPath = path.join(outputDir, outputFile);
+    try {
+      for (const file of markdownFiles) {
+        const fileStartTime = Date.now();
+        const inputPath = path.join(inputDir, file);
+        const outputFile = file.replace(/\.(md|markdown)$/i, '.pdf');
+        const outputPath = path.join(outputDir, outputFile);
 
-      try {
-        logger.info('Converting file', { inputFile: file, outputFile });
-        console.log(chalk.blue(`Converting: ${file} → ${outputFile}`));
+        try {
+          logger.info('Converting file', { inputFile: file, outputFile });
+          console.log(chalk.blue(`Converting: ${file} → ${outputFile}`));
 
-        await converter.convertToPdf(inputPath, outputPath);
+          await converter.convertToPdf(inputPath, outputPath);
 
-        const fileEndTime = Date.now();
-        const fileDuration = fileEndTime - fileStartTime;
-        conversionTimes.push({ file, duration: fileDuration, success: true });
+          const fileEndTime = Date.now();
+          const fileDuration = fileEndTime - fileStartTime;
+          conversionTimes.push({ file, duration: fileDuration, success: true });
 
-        logger.info('File converted successfully', {
-          inputFile: file,
-          outputFile,
-          duration: fileDuration,
-          durationFormatted: formatDuration(fileDuration)
-        });
-        console.log(chalk.green(`✓ ${file} → ${outputFile} (${formatDuration(fileDuration)})`));
-        successCount++;
+          logger.info('File converted successfully', {
+            inputFile: file,
+            outputFile,
+            duration: fileDuration,
+            durationFormatted: formatDuration(fileDuration)
+          });
+          console.log(chalk.green(`✓ ${file} → ${outputFile} (${formatDuration(fileDuration)})`));
+          successCount++;
 
-      } catch (error) {
-        const fileEndTime = Date.now();
-        const fileDuration = fileEndTime - fileStartTime;
-        conversionTimes.push({ file, duration: fileDuration, success: false });
+        } catch (error) {
+          const fileEndTime = Date.now();
+          const fileDuration = fileEndTime - fileStartTime;
+          conversionTimes.push({ file, duration: fileDuration, success: false });
 
-        logger.error('File conversion failed', {
-          inputFile: file,
-          error: error.message,
-          stack: error.stack,
-          duration: fileDuration,
-          durationFormatted: formatDuration(fileDuration)
-        });
-        console.error(chalk.red(`✗ ${file}: ${error.message} (${formatDuration(fileDuration)})`));
-        errorCount++;
+          logger.error('File conversion failed', {
+            inputFile: file,
+            error: error.message,
+            stack: error.stack,
+            duration: fileDuration,
+            durationFormatted: formatDuration(fileDuration)
+          });
+          console.error(chalk.red(`✗ ${file}: ${error.message} (${formatDuration(fileDuration)})`));
+          errorCount++;
+        }
       }
+    } finally {
+      // Clean up browser after all conversions
+      logger.info('Cleaning up converter resources');
+      await converter.cleanup();
     }
 
     const totalEndTime = Date.now();
