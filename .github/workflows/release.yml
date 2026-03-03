@@ -280,7 +280,7 @@ jobs:
         uses: LiquidLogicLabs/git-changelog-builder-action@v3
         with:
           from-tag: "@latest-release"
-          to-tag: ${{ steps.tag-info.outputs.tag-name }}
+          to-tag: ${{ steps.tag-info.outputs.name }}
           mode: hybrid
           fail-on-error: false
           fetch-tag-annotations: true
@@ -311,7 +311,7 @@ jobs:
         uses: LiquidLogicLabs/git-action-release@v2
         with:
           platform: ${{ github.server_url == 'https://github.com' && 'github' || 'gitea' }}
-          tag: ${{ steps.tag-info.outputs.tag-name }}
+          tag: ${{ steps.tag-info.outputs.name }}
           name: Release v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -319,6 +319,6 @@ jobs:
 
       - name: Attach npm tarball to release
         if: steps.tag-info.outputs.exists == 'true' && needs.npm.outputs.tarball != ''
-        run: gh release upload "${{ steps.tag-info.outputs.tag-name }}" "${{ needs.npm.outputs.tarball }}" --clobber
+        run: gh release upload "${{ steps.tag-info.outputs.name }}" "${{ needs.npm.outputs.tarball }}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
