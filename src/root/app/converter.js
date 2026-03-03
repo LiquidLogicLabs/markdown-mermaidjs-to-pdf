@@ -2,23 +2,25 @@ const fs = require('fs-extra');
 const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer');
+const matter = require('gray-matter');
+const { PDFDocument } = require('pdf-lib');
 const { setupLogger } = require('./logger');
 
 class MarkdownConverter {
-  constructor() {
+  constructor(options = {}) {
     this.logger = setupLogger();
     this.browser = null;
     this.page = null;
     this.mermaid = null;
-    this.currentFilename = null; // Track current file being processed
+    this.currentFilename = null;
+    this.frontMatterMode = options.frontMatterMode || 'none';
 
-    // Configure Marked
     marked.setOptions({
       breaks: false,
       gfm: true
     });
 
-    this.logger.info('MarkdownConverter initialized');
+    this.logger.info('MarkdownConverter initialized', { frontMatterMode: this.frontMatterMode });
   }
 
   // Timing utility function
@@ -102,18 +104,19 @@ class MarkdownConverter {
 
       // Process markdown and render Mermaid diagrams
       const processStartTime = Date.now();
-      const htmlContent = await this.processMarkdown(markdownContent);
+      const { html: htmlContent, frontMatter } = await this.processMarkdown(markdownContent);
       timing.processMarkdown = Date.now() - processStartTime;
       this.logger.debug('Markdown processed to HTML', {
         filename: this.currentFilename,
         htmlSize: htmlContent.length,
+        hasFrontMatter: Object.keys(frontMatter).length > 0,
         duration: timing.processMarkdown,
         durationFormatted: this.formatDuration(timing.processMarkdown)
       });
 
       // Generate PDF
       const pdfStartTime = Date.now();
-      await this.generatePdf(htmlContent, outputPath);
+      await this.generatePdf(htmlContent, outputPath, frontMatter);
       timing.generatePdf = Date.now() - pdfStartTime;
       this.logger.debug('PDF generation completed', {
         filename: this.currentFilename,
@@ -169,12 +172,22 @@ class MarkdownConverter {
   async processMarkdown(markdownContent) {
     this.logger.debug('Processing markdown content', { filename: this.currentFilename });
 
-    // Extract Mermaid diagrams
-    const mermaidDiagrams = this.extractMermaidDiagrams(markdownContent);
+    // Parse YAML front matter
+    const { data: frontMatter, content: contentWithoutFrontMatter } = matter(markdownContent);
+    const hasFrontMatter = Object.keys(frontMatter).length > 0;
+    if (hasFrontMatter) {
+      this.logger.info('YAML front matter detected', {
+        filename: this.currentFilename,
+        fields: Object.keys(frontMatter),
+        mode: this.frontMatterMode
+      });
+    }
+
+    // Extract Mermaid diagrams from content (front matter already stripped)
+    const mermaidDiagrams = this.extractMermaidDiagrams(contentWithoutFrontMatter);
     this.logger.debug('Extracted Mermaid diagrams', { filename: this.currentFilename, count: mermaidDiagrams.length });
 
-    // Replace Mermaid code blocks with placeholders that will be rendered in browser
-    let processedContent = markdownContent;
+    let processedContent = contentWithoutFrontMatter;
     for (let i = 0; i < mermaidDiagrams.length; i++) {
       const diagram = mermaidDiagrams[i];
       const placeholder = `\n\n<div class="mermaid-diagram" data-mermaid="${encodeURIComponent(diagram.code)}">\n<div class="mermaid-placeholder">Rendering diagram...</div>\n</div>\n\n`;
@@ -183,15 +196,13 @@ class MarkdownConverter {
       this.logger.debug('Replaced Mermaid diagram with placeholder', { filename: this.currentFilename, index: i, type: diagram.type });
     }
 
-    // Convert markdown to HTML
     const htmlContent = marked(processedContent);
     this.logger.debug('Markdown converted to HTML', { filename: this.currentFilename });
 
-    // Wrap in complete HTML document with Mermaid script
-    const fullHtml = this.wrapInHtmlDocument(htmlContent);
+    const fullHtml = this.wrapInHtmlDocument(htmlContent, frontMatter);
     this.logger.debug('HTML wrapped in complete document', { filename: this.currentFilename });
 
-    return fullHtml;
+    return { html: fullHtml, frontMatter };
   }
 
   extractMermaidDiagrams(markdownContent) {
@@ -261,7 +272,7 @@ class MarkdownConverter {
     }
   }
 
-  wrapInHtmlDocument(htmlContent) {
+  wrapInHtmlDocument(htmlContent, frontMatter = {}) {
     const css = `
       <style>
         body {
@@ -368,6 +379,48 @@ class MarkdownConverter {
           border-top: 1px solid #eee;
           margin: 2em 0;
         }
+
+        .front-matter-header {
+          margin-bottom: 2em;
+          padding-bottom: 1.5em;
+          border-bottom: 2px solid #2c3e50;
+        }
+
+        .front-matter-title {
+          font-size: 2.4em;
+          font-weight: 700;
+          color: #2c3e50;
+          margin: 0 0 0.3em 0;
+          line-height: 1.2;
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .front-matter-description {
+          font-size: 1.1em;
+          color: #555;
+          margin: 0 0 1em 0;
+          line-height: 1.5;
+        }
+
+        .front-matter-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 1.5em;
+          font-size: 0.9em;
+          color: #666;
+        }
+
+        .front-matter-meta-item {
+          display: flex;
+          align-items: center;
+          gap: 0.4em;
+        }
+
+        .front-matter-meta-label {
+          font-weight: 600;
+          color: #555;
+        }
       </style>
     `;
 
@@ -401,22 +454,56 @@ class MarkdownConverter {
       </script>
     `;
 
+    const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const formatDate = (val) => {
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        return val.toISOString().split('T')[0];
+      }
+      return String(val);
+    };
+    const documentTitle = frontMatter.title ? escapeHtml(frontMatter.title) : 'Markdown to PDF';
+
+    let titleBlockHtml = '';
+    if (this.frontMatterMode === 'styled' && Object.keys(frontMatter).length > 0) {
+      const parts = [];
+      if (frontMatter.title) {
+        parts.push(`<h1 class="front-matter-title">${escapeHtml(frontMatter.title)}</h1>`);
+      }
+      if (frontMatter.description) {
+        parts.push(`<p class="front-matter-description">${escapeHtml(frontMatter.description)}</p>`);
+      }
+      const metaItems = [];
+      if (frontMatter.author) {
+        metaItems.push(`<span class="front-matter-meta-item"><span class="front-matter-meta-label">Author:</span> ${escapeHtml(frontMatter.author)}</span>`);
+      }
+      if (frontMatter.date) {
+        metaItems.push(`<span class="front-matter-meta-item"><span class="front-matter-meta-label">Date:</span> ${escapeHtml(formatDate(frontMatter.date))}</span>`);
+      }
+      if (metaItems.length > 0) {
+        parts.push(`<div class="front-matter-meta">${metaItems.join('')}</div>`);
+      }
+      if (parts.length > 0) {
+        titleBlockHtml = `<header class="front-matter-header">${parts.join('\n')}</header>`;
+      }
+    }
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown to PDF</title>
+    <title>${documentTitle}</title>
     ${css}
     ${mermaidScript}
 </head>
 <body>
+    ${titleBlockHtml}
     ${htmlContent}
 </body>
 </html>`;
   }
 
-  async generatePdf(htmlContent, outputPath) {
+  async generatePdf(htmlContent, outputPath, frontMatter = {}) {
     const pdfStartTime = Date.now();
     this.logger.debug('Initializing browser for PDF generation', { filename: this.currentFilename });
 
@@ -425,7 +512,8 @@ class MarkdownConverter {
       contentSet: 0,
       mermaidLoad: 0,
       diagramRender: 0,
-      pdfGeneration: 0
+      pdfGeneration: 0,
+      metadataEmbed: 0
     };
 
     try {
@@ -588,6 +676,11 @@ class MarkdownConverter {
       await this.page.pdf(pdfOptions);
       pdfTiming.pdfGeneration = Date.now() - pdfGenStartTime;
 
+      // Embed PDF document metadata from front matter
+      const metadataStartTime = Date.now();
+      await this.embedPdfMetadata(outputPath, frontMatter);
+      pdfTiming.metadataEmbed = Date.now() - metadataStartTime;
+
       const totalPdfTime = Date.now() - pdfStartTime;
       this.logger.info('PDF generated successfully', {
         filename: this.currentFilename,
@@ -608,6 +701,64 @@ class MarkdownConverter {
         totalPdfTimeFormatted: this.formatDuration(totalPdfTime)
       });
       throw new Error(`PDF generation failed: ${error.message}`);
+    }
+  }
+
+  async embedPdfMetadata(outputPath, frontMatter) {
+    const hasMeta = frontMatter && Object.keys(frontMatter).length > 0;
+    if (!hasMeta) {
+      this.logger.debug('No front matter metadata to embed', { filename: this.currentFilename });
+      return;
+    }
+
+    this.logger.debug('Embedding PDF metadata', {
+      filename: this.currentFilename,
+      fields: Object.keys(frontMatter)
+    });
+
+    try {
+      const pdfBytes = await fs.readFile(outputPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+
+      if (frontMatter.title) {
+        pdfDoc.setTitle(String(frontMatter.title));
+      }
+      if (frontMatter.author) {
+        pdfDoc.setAuthor(String(frontMatter.author));
+      }
+      if (frontMatter.description) {
+        pdfDoc.setSubject(String(frontMatter.description));
+      }
+      if (frontMatter.keywords) {
+        const keywords = Array.isArray(frontMatter.keywords)
+          ? frontMatter.keywords
+          : String(frontMatter.keywords).split(',').map(k => k.trim());
+        pdfDoc.setKeywords(keywords);
+      }
+      if (frontMatter.date) {
+        const parsedDate = frontMatter.date instanceof Date
+          ? frontMatter.date
+          : new Date(frontMatter.date);
+        if (!isNaN(parsedDate.getTime())) {
+          pdfDoc.setCreationDate(parsedDate);
+          pdfDoc.setModificationDate(parsedDate);
+        }
+      }
+      pdfDoc.setCreator('markdown-mermaidjs-to-pdf');
+
+      const modifiedPdfBytes = await pdfDoc.save();
+      await fs.writeFile(outputPath, modifiedPdfBytes);
+
+      this.logger.info('PDF metadata embedded successfully', {
+        filename: this.currentFilename,
+        title: frontMatter.title,
+        author: frontMatter.author
+      });
+    } catch (error) {
+      this.logger.warn('Failed to embed PDF metadata, PDF was still generated', {
+        filename: this.currentFilename,
+        error: error.message
+      });
     }
   }
 

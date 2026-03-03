@@ -11,6 +11,11 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      # Writable npm cache (fixes act when container runs as non-root via --container-options)
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+      # Skip Puppeteer browser download in test job (lint/unit tests only; E2E and Docker use their own)
+      PUPPETEER_SKIP_DOWNLOAD: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

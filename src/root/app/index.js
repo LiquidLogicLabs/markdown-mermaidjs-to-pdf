@@ -6,6 +6,7 @@ const fs = require('fs-extra');
 const chalk = require('chalk');
 const { MarkdownConverter } = require('./converter');
 const { setupLogger } = require('./logger');
+const { version } = require('../../../package.json');
 require('dotenv').config();
 
 // Setup logger
@@ -26,11 +27,12 @@ async function main() {
   program
     .name('markdown-mermaidjs-to-pdf')
     .description('Convert markdown files with Mermaid diagrams to PDF')
-    .version('1.0.0')
-    .option('-i, --input <dir>', 'Input directory path (default: /data/input)')
-    .option('-o, --output <dir>', 'Output directory path (default: /data/output)')
+    .version(version)
+    .option('-i, --input <dir>', 'Input directory path (default: ./input)')
+    .option('-o, --output <dir>', 'Output directory path (default: ./output)')
     .option('-v, --verbose', 'Enable verbose logging')
     .option('--no-logging', 'Disable logging')
+    .option('--front-matter <mode>', 'Front matter handling: "none" (strip only) or "styled" (render title block)')
     .parse();
 
   const options = program.opts();
@@ -45,8 +47,8 @@ async function main() {
     }
 
     // Set default directories
-    const inputDir = options.input || '/data/input';
-    const outputDir = options.output || '/data/output';
+    const inputDir = options.input || './input';
+    const outputDir = options.output || './output';
 
     logger.info('Starting Markdown to PDF batch converter', {
       inputDir,
@@ -84,9 +86,16 @@ async function main() {
       process.exit(0);
     }
 
+    const frontMatterMode = options.frontMatter || process.env.FRONT_MATTER_MODE || 'none';
+    if (!['none', 'styled'].includes(frontMatterMode)) {
+      logger.error(`Invalid --front-matter mode: ${frontMatterMode}`);
+      console.error(chalk.red(`Error: Invalid --front-matter mode "${frontMatterMode}". Use "none" or "styled".`));
+      process.exit(1);
+    }
+
     // Initialize converter
     logger.info('Initializing converter');
-    const converter = new MarkdownConverter();
+    const converter = new MarkdownConverter({ frontMatterMode });
 
     // Process each markdown file
     let successCount = 0;

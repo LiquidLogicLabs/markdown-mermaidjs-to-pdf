@@ -37,6 +37,7 @@ __pycache__/
 
 # Node.js
 node_modules/
+.npm-cache/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -63,3 +64,13 @@ coverage/
 # Act local config (copy from .act.env.example / .act.secrets.example)
 .act.env
 .act.secrets
+
+# IDE and AI tool configs
+.cursor/
+.claude/
+
+# Build artifacts
+*.tgz
+
+# BMAD framework
+_bmad/

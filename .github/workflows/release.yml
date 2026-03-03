@@ -31,17 +31,23 @@ env:
 
   CREATE_RELEASE: ${{ vars.CREATE_RELEASE || 'true' }}
 
+  NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL || 'https://npm.pkg.github.com' }}
+  NPM_SCOPE: ${{ vars.NPM_SCOPE || '@liquidlogiclabs' }}
+  PUBLISH_NPM: ${{ vars.PUBLISH_NPM || 'true' }}
+
 jobs:
   test:
     name: Test
     uses: ./.github/workflows/test.yml
 
-  build:
-    name: Build
+  # ---------- Docker image build, push, and security scan ----------
+
+  docker:
+    name: Docker
     runs-on: ubuntu-latest
     needs: test
     permissions:
-      contents: write
+      contents: read
       packages: write
       security-events: write
 
@@ -122,18 +128,14 @@ jobs:
           file: ${{ env.DOCKER_FILE }}
           push: ${{ env.IMAGE_PUSH_MODE }}
           load: ${{ env.IMAGE_LOAD_MODE }}
-          # When load=true, only one platform is allowed (buildx cannot load manifest lists)
           platforms: ${{ env.IMAGE_LOAD_MODE == 'true' && 'linux/amd64' || env.DOCKER_PLATFORMS }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             VERSION=${{ steps.version.outputs.version }}
-          # Skip GHA cache when loading locally (e.g. act) — GHA cache is not available
           cache-from: ${{ env.IMAGE_LOAD_MODE != 'true' && 'type=gha' || '' }}
           cache-to: ${{ env.IMAGE_LOAD_MODE != 'true' && 'type=gha,mode=max' || '' }}
-
-      # --- Security scan (only when image was pushed) ---
 
       - name: Run Trivy vulnerability scanner
         if: env.IMAGE_PUSH_MODE == 'true'
@@ -170,11 +172,99 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      # --- Release (only on tag push with CREATE_RELEASE enabled) ---
+  # ---------- npm package build and publish ----------
+
+  npm:
+    name: npm
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    env:
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+    outputs:
+      tarball: ${{ steps.npm-pack.outputs.tarball }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: ${{ env.NPM_REGISTRY_URL }}
+          scope: ${{ env.NPM_SCOPE }}
+
+      - name: Validate version tag
+        id: version
+        uses: LiquidLogicLabs/git-action-tag-validate-version@v2
+        with:
+          tag: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          version-type: semver
+
+      - name: Set npm package version
+        if: env.PUBLISH_NPM != 'false' && steps.version.outputs.is-valid == 'true'
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Pack npm tarball
+        if: env.PUBLISH_NPM != 'false' && steps.version.outputs.is-valid == 'true'
+        id: npm-pack
+        run: |
+          TARBALL=$(npm pack --pack-destination .)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "Packed: $TARBALL"
+
+      - name: Upload npm tarball artifact
+        if: env.PUBLISH_NPM != 'false' && steps.npm-pack.outputs.tarball != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: ${{ steps.npm-pack.outputs.tarball }}
+
+      - name: Publish to npm registry
+        if: env.PUBLISH_NPM != 'false' && steps.version.outputs.is-valid == 'true' && startsWith(github.ref, 'refs/tags/')
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
+
+  # ---------- GitHub / Gitea release ----------
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [docker, npm]
+    if: startsWith(github.ref, 'refs/tags/') && vars.CREATE_RELEASE != 'false'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate version tag
+        id: version
+        uses: LiquidLogicLabs/git-action-tag-validate-version@v2
+        with:
+          tag: ${{ github.ref_name }}
+          version-type: semver
+
+      - name: Download npm tarball
+        if: needs.npm.outputs.tarball != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
 
       - name: Get tag info
         id: tag-info
-        if: startsWith(github.ref, 'refs/tags/') && env.CREATE_RELEASE == 'true'
+        if: steps.version.outputs.is-valid == 'true'
         uses: LiquidLogicLabs/git-tag-info-action@v2
         with:
           tag-name: ${{ env.IMAGE_TAG_NAME }}
@@ -183,7 +273,7 @@ jobs:
 
       - name: Build changelog
         id: changelog
-        if: startsWith(github.ref, 'refs/tags/') && env.CREATE_RELEASE == 'true' && steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
+        if: steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
         uses: LiquidLogicLabs/git-changelog-builder-action@v3
         with:
           from-tag: "@latest-release"
@@ -193,9 +283,17 @@ jobs:
           fetch-tag-annotations: true
           postfix-message: |
             ---
-            ## Docker Image
+            ## Installation
 
-            **Image:** `${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG_NAME }}`
+            ### npm
+            ```bash
+            npm install -g ${{ env.NPM_SCOPE }}/${{ env.IMAGE_NAME }}
+            ```
+
+            ### Docker
+            ```bash
+            docker pull ${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG_NAME }}
+            ```
 
             **Platforms:** ${{ env.DOCKER_PLATFORMS }}
           configuration-json: |
@@ -206,7 +304,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create release
-        if: env.CREATE_RELEASE == 'true' && startsWith(github.ref, 'refs/tags/') && steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
+        if: steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
         uses: LiquidLogicLabs/git-action-release@v2
         with:
           platform: ${{ github.server_url == 'https://github.com' && 'github' || 'gitea' }}
@@ -215,3 +313,9 @@ jobs:
           body: ${{ steps.changelog.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
           allow-updates: true
+
+      - name: Attach npm tarball to release
+        if: steps.tag-info.outputs.exists == 'true' && needs.npm.outputs.tarball != ''
+        run: gh release upload "${{ steps.tag-info.outputs.tag-name }}" "${{ needs.npm.outputs.tarball }}" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,8 +1,29 @@
 {
-  "name": "markdown-mermaidjs-to-pdf",
+  "name": "@liquidlogiclabs/markdown-mermaidjs-to-pdf",
   "version": "1.0.1",
   "description": "Convert markdown with Mermaid diagrams to PDF",
   "main": "src/root/app/index.js",
+  "bin": {
+    "markdown-mermaidjs-to-pdf": "src/root/app/index.js",
+    "mdmmjs2pdf": "src/root/app/index.js"
+  },
+  "files": [
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf.git"
+  },
+  "homepage": "https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf#readme",
+  "bugs": {
+    "url": "https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
   "scripts": {
     "prepare": "husky",
     "start": "node src/root/app/index.js",
@@ -26,7 +47,11 @@
     "markdown",
     "pdf",
     "mermaid",
-    "converter"
+    "converter",
+    "mermaidjs",
+    "markdown-to-pdf",
+    "cli",
+    "puppeteer"
   ],
   "author": "LiquidLogicLabs",
   "license": "MIT",
@@ -35,10 +60,11 @@
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
     "fs-extra": "^11.1.1",
+    "gray-matter": "^4.0.3",
     "jsdom": "^23.0.1",
     "marked": "^9.1.6",
     "mermaid": "^10.6.1",
-    "path": "^0.12.7",
+    "pdf-lib": "^1.17.1",
     "puppeteer": "24.14.0",
     "rimraf": "6.0.1",
     "winston": "^3.11.0"

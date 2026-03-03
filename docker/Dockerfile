@@ -59,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "console.log('Health check passed')" || exit 1
 
 # Default command
-CMD ["node", "src/root/app/index.js"] 
+CMD ["node", "src/root/app/index.js", "-i", "/data/input", "-o", "/data/output"]
