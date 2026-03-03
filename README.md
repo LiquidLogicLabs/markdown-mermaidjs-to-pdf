@@ -2,7 +2,7 @@
 
 A Docker-based application that converts Markdown files with Mermaid diagrams to high-quality PDF documents.
 
-[![Docker Image](https://img.shields.io/badge/docker-liquidlogiclabs%2Fmarkdown--to--pdf-blue)](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
+[![Container Image](https://img.shields.io/badge/ghcr-liquidlogiclabs%2Fmarkdown--mermaidjs--to--pdf-blue)](https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf/pkgs/container/markdown-mermaidjs-to-pdf)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Repository](https://img.shields.io/badge/github-liquidlogiclabs%2Fmarkdown--mermaidjs--to--pdf-black)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf)
 [![Build Status](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions/workflows/ci.yml/badge.svg)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions)
@@ -50,25 +50,30 @@ This application converts Markdown files containing Mermaid diagrams into profes
 ### Basic Usage
 
 ```bash
+# Pull the image from GitHub Container Registry (GHCR)
+docker pull ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
 # Convert all markdown files in ./input to ./output
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 
 # Convert files from custom directories
 docker run --rm \
   -v $(pwd)/docs:/data/input \
   -v $(pwd)/pdfs:/data/output \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 
 # Enable verbose logging
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
   -e LOG_LEVEL=debug \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 ```
+
+If `docker pull` returns **denied**, the GHCR package is private. Either make it public (repo → Packages → package → Package settings → Change visibility → Public) or log in: `echo YOUR_GITHUB_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin` (PAT needs `read:packages`).
 
 ## 📁 Directory Structure
 
@@ -94,29 +99,29 @@ The application uses a simple directory structure:
 ### Docker Usage Examples
 
 ```bash
-# Build image locally
-docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
+# Build image locally (or pull from GHCR: docker pull ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest)
+docker build -f docker/Dockerfile -t ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .
 
 # Run with custom log level
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
   -e LOG_LEVEL=debug \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 
 # Run with debug mode enabled
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
   -e MARKDOWN_MERMAIDJS_TO_PDF_DEBUG=true \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 
 # Disable logging
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
   -e LOGGING_ENABLED=false \
-  liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 ```
 
 ## 🧪 Testing
@@ -139,8 +144,8 @@ npm run test:e2e
 
 This README contains comprehensive documentation for the project. For additional information:
 
-- **Docker Hub**: [Container Documentation](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
-- **GitHub**: [Source Code](https://github.com/liquidlogiclabs/markdown-converter)
+- **Container image (GHCR)**: [Package](https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf/pkgs/container/markdown-mermaidjs-to-pdf)
+- **GitHub**: [Source Code](https://github.com/LiquidLogicLabs/markdown-mermaidjs-to-pdf)
 
 ## 🏗️ Architecture
 
@@ -204,7 +209,7 @@ npm run test:e2e
 npm run run:docker
 ```
 
-Docker image build and push happen in the E2E and release workflows only; for a one-off local run use `docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .` then `npm run run:docker` or the `docker run` examples above.
+Docker image build and push happen in the release workflow (GHCR). For a one-off local run use `docker pull ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest` or `docker build -f docker/Dockerfile -t ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .`, then `npm run run:docker` or the `docker run` examples above.
 
 ### Local Development with Act
 

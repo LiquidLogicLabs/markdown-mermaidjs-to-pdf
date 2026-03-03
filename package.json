@@ -20,7 +20,7 @@
     "ci": "act push -W .github/workflows/ci.yml $( [ -f .act.env ] && echo '--var-file .act.env' ) $( [ -f .act.secrets ] && echo '--secret-file .act.secrets' ) --container-options \"--user $(id -u):$(id -g)\"",
     "test:e2e": "act workflow_dispatch -W .github/workflows/e2e.yml $( [ -f .act.env ] && echo '--var-file .act.env' ) $( [ -f .act.secrets ] && echo '--secret-file .act.secrets' ) --container-options \"--user $(id -u):$(id -g)\"",
     "build:act": "act workflow_dispatch -W .github/workflows/release.yml --input tag=v$(node -p \"require('./package.json').version\") $( [ -f .act.env ] && echo '--var-file .act.env' ) $( [ -f .act.secrets ] && echo '--secret-file .act.secrets' ) --container-options \"--user $(id -u):$(id -g)\"",
-    "run:docker": "docker run --rm -v \"$(pwd)/data/input:/data/input\" -v \"$(pwd)/data/output:/data/output\" -v \"$(pwd)/data/logs:/data/logs\" -e LOGGING_ENABLED=true -e LOG_LEVEL=info liquidlogiclabs/markdown-mermaidjs-to-pdf:latest"
+    "run:docker": "docker run --rm -v \"$(pwd)/data/input:/data/input\" -v \"$(pwd)/data/output:/data/output\" -v \"$(pwd)/data/logs:/data/logs\" -e LOGGING_ENABLED=true -e LOG_LEVEL=info ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest"
   },
   "keywords": [
     "markdown",
