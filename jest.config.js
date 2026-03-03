@@ -17,8 +17,7 @@ module.exports = {
     '/node_modules/',
     '/tests/',
     '/coverage/',
-    '/docs/',
-    '/scripts/'
+    '/docs/'
   ],
 
   // Module file extensions

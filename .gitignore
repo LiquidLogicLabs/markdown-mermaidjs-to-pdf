@@ -3,6 +3,7 @@ test/output*/
 test/data/output*/
 src/root/output*/
 data/
+logs/
 
 # Log files
 *.log
@@ -57,4 +58,8 @@ coverage/
 .eslintcache
 
 # Prettier cache
-.prettiercache 
+.prettiercache
+
+# Act local config (copy from .act.env.example / .act.secrets.example)
+.act.env
+.act.secrets

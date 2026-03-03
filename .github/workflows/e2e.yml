@@ -1,0 +1,54 @@
+name: E2E
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Puppeteer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare E2E data
+        run: |
+          mkdir -p data/input data/output data/logs
+          if [ -d "samples" ]; then
+            cp samples/*.md data/input/ 2>/dev/null || true
+          fi
+          if [ ! "$(ls -A data/input/*.md 2>/dev/null)" ]; then
+            echo "# Test Document" > data/input/test.md
+            echo "This is a test document for E2E." >> data/input/test.md
+          fi
+
+      - name: Run converter (local)
+        run: npm start -- -i data/input -o data/output
+
+      - name: Verify PDFs
+        run: |
+          if [ "$(ls -A data/output/*.pdf 2>/dev/null)" ]; then
+            echo "✓ E2E passed - PDF(s) generated"
+            ls data/output/*.pdf
+          else
+            echo "✗ E2E failed - No PDF generated"
+            ls -la data/output/ 2>/dev/null || true
+            exit 1
+          fi

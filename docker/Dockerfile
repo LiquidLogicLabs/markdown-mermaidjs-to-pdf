@@ -1,17 +1,6 @@
 # Use Node.js 20 LTS as base image
 FROM node:20-alpine
 
-LABEL org.opencontainers.image.source=https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf
-LABEL org.opencontainers.image.title="Markdown to PDF with MermaidJS"
-LABEL org.opencontainers.image.description="Convert Markdown files with Mermaid diagrams to PDF"
-LABEL org.opencontainers.image.licenses=MIT
-LABEL org.opencontainers.image.authors="Liquid Logic Labs"
-LABEL org.opencontainers.image.vendor="Liquid Logic Labs"
-LABEL org.opencontainers.image.version=1.0.0
-LABEL org.opencontainers.image.revision=1
-LABEL org.opencontainers.image.url=https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf
-LABEL org.opencontainers.image.documentation=https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/blob/main/README.md
-
 # Set working directory
 WORKDIR /app
 
@@ -33,8 +22,8 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --omit=dev && npm cache clean --force
+# Install dependencies (ignore-scripts so prepare/husky is not run in container)
+RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy application code
 COPY src/ ./src/

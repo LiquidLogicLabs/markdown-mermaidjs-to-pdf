@@ -1,0 +1,216 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and release"
+        required: true
+        type: string
+
+env:
+  GIT_DISCOVERY_ACROSS_FILESYSTEM: 1
+
+  DEBUG: ${{ vars.DEBUG || 'false' }}
+
+  REGISTRY_NAME: ${{ vars.REGISTRY_NAME || 'ghcr.io' }}
+  REGISTRY_ORG: ${{ vars.REGISTRY_ORG || 'liquidlogiclabs' }}
+
+  DOCKER_FILE: ${{ vars.DOCKER_FILE || 'docker/Dockerfile' }}
+  DOCKER_PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
+
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'markdown-mermaidjs-to-pdf' }}
+  IMAGE_TAG_NAME: ${{ github.event.inputs.tag || vars.IMAGE_TAG_NAME || github.ref_name }}
+
+  IMAGE_PUSH_MODE: ${{ vars.IMAGE_BUILD_MODE != 'load' }}
+  IMAGE_LOAD_MODE: ${{ vars.IMAGE_BUILD_MODE == 'load' }}
+
+  CREATE_RELEASE: ${{ vars.CREATE_RELEASE || 'true' }}
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Debug workflow_dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "event_name: ${{ github.event_name }}"
+          echo "inputs.tag: ${{ github.event.inputs.tag }}"
+          echo "IMAGE_TAG_NAME: ${{ env.IMAGE_TAG_NAME }}"
+
+      - name: Validate version tag
+        id: version
+        uses: LiquidLogicLabs/git-action-tag-validate-version@v2
+        with:
+          tag: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          version-type: semver
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          cleanup: true
+          platforms: ${{ env.DOCKER_PLATFORMS }}
+
+      - name: Log in to registry
+        if: env.IMAGE_PUSH_MODE == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_NAME }}
+          username: ${{ secrets.REGISTRY_USERNAME || github.actor }}
+          password: ${{ secrets.REGISTRY_PASSWORD || secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: LiquidLogicLabs/git-action-docker-metadata@v5.10.1
+        with:
+          images: ${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=match,pattern=v?(\d+),group=1
+            type=match,pattern=v?(\d+\.\d+),group=1
+            type=match,pattern=v?(\d+\.\d+\.\d+),group=1
+            type=raw,value={{commit_date 'YYYYMMDDHHmm'}}
+            type=raw,value={{tag}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value={{tag}}-{{sha}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ env.IMAGE_TAG_NAME }},enable=${{ github.event_name == 'workflow_dispatch' && env.IMAGE_TAG_NAME != '' }}
+            type=raw,value=dev,enable=${{ !startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch' }}
+            type=raw,value=dev-{{sha}},enable=${{ !startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch' }}
+          labels: |
+            org.opencontainers.image.title=Markdown to PDF with MermaidJS
+            org.opencontainers.image.description=Convert Markdown files with Mermaid diagrams to PDF
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.authors=Liquid Logic Labs
+            org.opencontainers.image.vendor=Liquid Logic Labs
+            org.opencontainers.image.url=https://${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG_NAME }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+
+      - name: Dump environment variables
+        if: env.DEBUG == 'true' || env.DEBUG == '1'
+        run: printenv | sort
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKER_FILE }}
+          push: ${{ env.IMAGE_PUSH_MODE }}
+          load: ${{ env.IMAGE_LOAD_MODE }}
+          # When load=true, only one platform is allowed (buildx cannot load manifest lists)
+          platforms: ${{ env.IMAGE_LOAD_MODE == 'true' && 'linux/amd64' || env.DOCKER_PLATFORMS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ steps.version.outputs.version }}
+          # Skip GHA cache when loading locally (e.g. act) — GHA cache is not available
+          cache-from: ${{ env.IMAGE_LOAD_MODE != 'true' && 'type=gha' || '' }}
+          cache-to: ${{ env.IMAGE_LOAD_MODE != 'true' && 'type=gha,mode=max' || '' }}
+
+      # --- Security scan (only when image was pushed) ---
+
+      - name: Run Trivy vulnerability scanner
+        if: env.IMAGE_PUSH_MODE == 'true'
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          timeout: '10m'
+
+      - name: Generate SBOM
+        if: env.IMAGE_PUSH_MODE == 'true'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        if: env.IMAGE_PUSH_MODE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+      - name: Upload Trivy results
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # --- Release (only on tag push with CREATE_RELEASE enabled) ---
+
+      - name: Get tag info
+        id: tag-info
+        if: startsWith(github.ref, 'refs/tags/') && env.CREATE_RELEASE == 'true'
+        uses: LiquidLogicLabs/git-tag-info-action@v2
+        with:
+          tag-name: ${{ env.IMAGE_TAG_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          skip-certificate-check: true
+
+      - name: Build changelog
+        id: changelog
+        if: startsWith(github.ref, 'refs/tags/') && env.CREATE_RELEASE == 'true' && steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
+        uses: LiquidLogicLabs/git-changelog-builder-action@v3
+        with:
+          from-tag: "@latest-release"
+          to-tag: ${{ steps.tag-info.outputs.tag-name }}
+          mode: hybrid
+          fail-on-error: false
+          fetch-tag-annotations: true
+          postfix-message: |
+            ---
+            ## Docker Image
+
+            **Image:** `${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG_NAME }}`
+
+            **Platforms:** ${{ env.DOCKER_PLATFORMS }}
+          configuration-json: |
+            {
+              "template": "#{{CHANGELOG}}"
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        if: env.CREATE_RELEASE == 'true' && startsWith(github.ref, 'refs/tags/') && steps.tag-info.outputs.exists == 'true' && steps.version.outputs.is-valid == 'true'
+        uses: LiquidLogicLabs/git-action-release@v2
+        with:
+          platform: ${{ github.server_url == 'https://github.com' && 'github' || 'gitea' }}
+          tag: ${{ steps.tag-info.outputs.tag-name }}
+          name: Release v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allow-updates: true

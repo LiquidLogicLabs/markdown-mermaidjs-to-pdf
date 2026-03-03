@@ -5,7 +5,7 @@ A Docker-based application that converts Markdown files with Mermaid diagrams to
 [![Docker Image](https://img.shields.io/badge/docker-liquidlogiclabs%2Fmarkdown--to--pdf-blue)](https://hub.docker.com/r/liquidlogiclabs/markdown-mermaidjs-to-pdf)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Repository](https://img.shields.io/badge/github-liquidlogiclabs%2Fmarkdown--mermaidjs--to--pdf-black)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf)
-[![Build Status](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions)
+[![Build Status](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions/workflows/ci.yml/badge.svg)](https://github.com/liquidlogiclabs/markdown-mermaidjs-to-pdf/actions)
 
 ## 🎯 Purpose
 
@@ -121,17 +121,19 @@ docker run --rm \
 
 ## 🧪 Testing
 
-Run the comprehensive test suite:
+All commands run via npm scripts:
 
 ```bash
-./scripts/test.sh
+# Unit tests and lint
+npm test
+npm run lint
+
+# E2E (Docker build + run + PDF verification) — use act locally
+npm run test:e2e
 ```
 
-This will:
-- Build the Docker image if needed
-- Convert all sample files to PDF
-- Validate the output files
-- Generate a test report
+- **Unit tests**: `npm test` runs Jest in `tests/unit/`.
+- **E2E**: `npm run test:e2e` runs the E2E workflow locally via [act](https://github.com/nektos/act) (builds the image, runs the container, verifies PDFs). On CI, the same workflow runs on push/PR.
 
 ## 📖 Documentation
 
@@ -153,11 +155,11 @@ The application uses a modular architecture:
 ## 📁 Project Structure
 
 ```
-markdown-converter/
+markdown-mermaidjs-to-pdf/
 ├── src/root/app/         # Application source code
 ├── docker/               # Docker-related files
 ├── tests/                # Test files
-├── scripts/              # Utility scripts
+├── .github/workflows/    # CI, E2E, and release workflows
 ├── docs/                 # Additional documentation (if needed)
 ├── samples/              # Sample markdown files for testing
 └── package.json          # Node.js dependencies
@@ -170,7 +172,7 @@ markdown-converter/
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd markdown-converter
+cd markdown-mermaidjs-to-pdf
 
 # Install dependencies
 npm install
@@ -185,25 +187,24 @@ npm test
 npm run dev
 ```
 
-### Using the Convenience Scripts
+### npm Scripts (all commands via npm)
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd markdown-converter
+# Lint and unit tests
+npm run lint
+npm test
 
-# Build the Docker image
-./scripts/build.sh
+# Run CI workflow locally (act)
+npm run ci
 
-# Run batch conversion
-./scripts/run.sh
+# Run E2E workflow locally (act: build image, run container, verify PDFs)
+npm run test:e2e
 
-# Convert files from custom directories
-./scripts/run.sh ./docs ./pdfs
-
-# Enable verbose logging
-./scripts/run.sh -v ./data/input ./data/output
+# Run converter via Docker (ensure data/input, data/output, data/logs exist)
+npm run run:docker
 ```
+
+Docker image build and push happen in the E2E and release workflows only; for a one-off local run use `docker build -f docker/Dockerfile -t liquidlogiclabs/markdown-mermaidjs-to-pdf:latest .` then `npm run run:docker` or the `docker run` examples above.
 
 ### Local Development with Act
 
@@ -227,107 +228,85 @@ cd markdown-converter
 
 #### Configuration
 
-Create a `.actrc` file in your home directory (`~/.actrc`) or in your local repo folder with the following variables:
+Use **`.act.env`** (vars) and **`.act.secrets`** (secrets) in the repo so `npm run ci`, `npm run test:e2e`, and `npm run build:act` load them when present. Copy from the examples and add to `.gitignore`:
+
+- **`.act.env.example`** → copy to `.act.env` (gitignored). Set `IMAGE_BUILD_MODE=load` and `CREATE_RELEASE=false` for local builds.
+- **`.act.secrets.example`** → copy to `.act.secrets` (gitignored). Set `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, and `GITHUB_TOKEN`.
+
+npm scripts pass `--var-file .act.env` and `--secret-file .act.secrets` to act when those files exist. Alternatively, use a `.actrc` in the repo or home directory:
 
 ```bash
-# Required secrets for Docker Hub authentication
--DOCKERHUB_USERNAME=your_dockerhub_username
--DOCKERHUB_TOKEN=your_dockerhub_token
-
-# Required secrets for GitHub Container Registry
--GITHUB_TOKEN=your_github_token
-
-# Optional: GitHub variables (with defaults)
--DOCKERHUB_OWNER=your_dockerhub_username
--GHCR_OWNER=your_github_username
-
-# Control actual pushing behavior
--PUBLISH_TO_DOCKERHUB=true
--PUBLISH_TO_GHCR=true
+# Optional: use repo .act.env / .act.secrets (npm scripts add these when files exist)
+--var-file .act.env
+--secret-file .act.secrets
 ```
 
 #### Getting Required Tokens
 
-1. **Docker Hub Token**:
-   - Go to [Docker Hub Account Settings](https://hub.docker.com/settings/security)
-   - Create a new access token
-   - Use your Docker Hub username and the generated token
+1. **GHCR (default)**: `REGISTRY_USERNAME` = your GitHub username, `REGISTRY_PASSWORD` = a GitHub PAT with `write:packages` scope (or use `GITHUB_TOKEN`).
+2. **Docker Hub**: `REGISTRY_USERNAME` = your Docker Hub username, `REGISTRY_PASSWORD` = a Docker Hub access token.
+3. **Gitea**: `REGISTRY_USERNAME` = your Gitea username, `REGISTRY_PASSWORD` = a Gitea token with package write scope.
 
-2. **GitHub Token**:
-   - Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
-   - Generate a new token with `repo` and `write:packages` scopes
-   - Or use `GITHUB_TOKEN` if running in a GitHub Actions environment
+Set `REGISTRY_NAME` to match your registry (e.g. `ghcr.io`, `docker.io`, `gitea.example.com`).
 
-#### Push Control Variables
+#### Workflows
 
-- `PUBLISH_TO_DOCKERHUB`: Set to `false` to prevent pushing to Docker Hub
-- `PUBLISH_TO_GHCR`: Set to `false` to prevent pushing to GitHub Container Registry
+- **`ci.yml`**: Triggered on push to main/develop and pull_request to main (with path filters). Runs the **test** workflow (lint + unit tests).
+- **`test.yml`**: Reusable job: checkout, Node 20, `npm ci`, `npm run lint`, `npm test`.
+- **`e2e.yml`**: Reusable: install deps, run converter locally on sample files, verify PDFs. Available via `npm run test:e2e` or `workflow_dispatch`.
+- **`release.yml`**: Triggered on tag push `v*.*.*` or `workflow_dispatch`. Single job: test, build and push/load Docker image, security scan (Trivy + SBOM), changelog, and GitHub/Gitea release.
 
-#### Pipeline Jobs
+#### Docker build and publish (vars)
 
-The CI/CD pipeline consists of the following jobs:
+All Docker build and publish behavior is driven by repo variables (set via GitHub/Gitea repo settings or `.actrc`). Defaults work out of the box for GHCR.
 
-- **`test`**: Runs linting, unit tests, and Docker container tests
-  - Installs dependencies and runs `npm ci`
-  - Executes linting with `npm run lint`
-  - Runs tests with `npm test`
-  - Builds Docker image and tests it with sample files
-  - Verifies PDF generation works correctly
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `REGISTRY_NAME` | `ghcr.io` | Container registry host |
+| `REGISTRY_ORG` | `liquidlogiclabs` | Registry owner/org/namespace |
+| `IMAGE_NAME` | `markdown-mermaidjs-to-pdf` | Docker image name |
+| `IMAGE_BUILD_MODE` | (empty = push) | Set to `load` to build locally without pushing |
+| `DOCKER_PLATFORMS` | `linux/amd64,linux/arm64` | Target platforms for multi-arch build |
+| `DOCKER_FILE` | `docker/Dockerfile` | Path to Dockerfile |
+| `CREATE_RELEASE` | `true` | Set to `false` to skip GitHub/Gitea release creation |
+| `DEBUG` | `false` | Set to `true` for verbose workflow logs |
 
-- **`build-and-push`**: Builds and pushes Docker images to registries
-  - Requires the `test` job to pass first
-  - Builds multi-platform images (linux/amd64, linux/arm64)
-  - Pushes to Docker Hub (if `PUBLISH_TO_DOCKERHUB=true`)
-  - Pushes to GitHub Container Registry (if `PUBLISH_TO_GHCR=true`)
-  - Publishes README to registries on tag releases
-  - Outputs image tags and digests for downstream jobs
+**Secrets:** `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` (generic, works with any registry). Falls back to `github.actor` / `GITHUB_TOKEN` for GHCR.
 
-- **`security-scan`**: Performs security scanning and generates SBOM
-  - Requires the `build-and-push` job to complete
-  - Runs Trivy vulnerability scanner on the built image
-  - Generates Software Bill of Materials (SBOM) in SPDX format
-  - Uploads scan results to GitHub Security tab
-  - Uploads SBOM as an artifact
-
-- **`notify`**: Provides pipeline completion notifications
-  - Runs after both `build-and-push` and `security-scan` complete
-  - Reports success or failure status
-  - Displays image tags and digests on success
-
-#### Running the Pipeline Locally
+#### Running Locally with Act
 
 ```bash
-# Run the entire pipeline
-act push
+# Run CI workflow (lint + unit tests)
+npm run ci
 
-# Run only the test job
-act push -j test
+# Run E2E workflow (run converter locally, verify PDFs)
+npm run test:e2e
 
-# Run only the build job (requires test to pass)
-act push -j build-and-push
+# Run release workflow locally (test → build image with load, no push; uses tag from package.json)
+npm run build:act
 
-# Run with specific event
-act push -e .github/workflows/ci-cd.yml
-
-# Run with verbose output
-act push -v
-
-# Run with specific actor (GitHub username)
-act push --actor your-github-username
+# Verbose
+act push -W .github/workflows/ci.yml -v
 ```
 
-#### Testing Specific Scenarios
+Ensure `.act.env` has `IMAGE_BUILD_MODE=load` and `CREATE_RELEASE=false` for local release runs, and `.act.secrets` has valid `GITHUB_TOKEN` (and registry credentials if you enable push). The npm scripts run act with `--container-options "--user $(id -u):$(id -g)"` so job containers run as your current user/group (Linux/macOS).
+
+#### Release Process
+
+Releases are driven by **tags**. Locally: bump version and push the tag (no custom release script):
 
 ```bash
-# Test a tag release
-act push --env GITHUB_REF=refs/tags/v1.0.0
+# Patch release (1.0.0 → 1.0.1): runs tests, bumps version, commits, tags, pushes
+npm run release:patch
 
-# Test main branch push
-act push --env GITHUB_REF=refs/heads/main
+# Minor: npm run release:minor
+# Major: npm run release:major
 
-# Test with custom event payload
-act push -e .github/workflows/ci-cd.yml --eventpath .github/events/push.json
+# Dry run: run tests only (no version bump)
+npm run release:dry-run
 ```
+
+Pushing a tag `v*` triggers **release.yml**: test → e2e → build-and-push → security-scan → changelog → GitHub/Gitea release.
 
 #### Troubleshooting Act
 
