@@ -231,7 +231,19 @@ jobs:
 
       - name: Publish to npm registry
         if: env.PUBLISH_NPM != 'false' && steps.version.outputs.is-valid == 'true' && startsWith(github.ref, 'refs/tags/')
-        run: npm publish
+        run: |
+          set +e
+          OUTPUT=$(npm publish 2>&1)
+          EXIT_CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [ $EXIT_CODE -ne 0 ]; then
+            if echo "$OUTPUT" | grep -q 'Cannot publish over existing version'; then
+              echo "::notice::Version already published to registry, skipping."
+            else
+              exit $EXIT_CODE
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
 
