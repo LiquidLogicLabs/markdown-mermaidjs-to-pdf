@@ -218,7 +218,7 @@ jobs:
         if: env.PUBLISH_NPM != 'false' && steps.version.outputs.is-valid == 'true'
         id: npm-pack
         run: |
-          TARBALL=$(npm pack --pack-destination .)
+          TARBALL=$(npm pack --pack-destination . 2>&1 | grep '\.tgz$' | tail -1)
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "Packed: $TARBALL"
 
