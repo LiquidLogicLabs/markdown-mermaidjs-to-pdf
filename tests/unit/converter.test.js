@@ -363,4 +363,104 @@ title: Title Only Doc
       expect(modifiedDoc.getTitle()).toBe('Bad Date Doc');
     });
   });
+
+  describe('PDF link support', () => {
+    describe('heading IDs for internal links', () => {
+      test('should add id attribute to headings in HTML output', async () => {
+        const markdownContent = `## My Section
+
+Some content.
+
+### Another Heading Here`;
+
+        const { html } = await converter.processMarkdown(markdownContent);
+
+        expect(html).toContain('id="my-section"');
+        expect(html).toContain('<h2 id="my-section">');
+        expect(html).toContain('id="another-heading-here"');
+        expect(html).toContain('<h3 id="another-heading-here">');
+      });
+
+      test('should slugify heading text in GFM style', async () => {
+        const markdownContent = `# Hello World
+## Code & Stuff`;
+
+        const { html } = await converter.processMarkdown(markdownContent);
+
+        expect(html).toMatch(/<h1[^>]*id="hello-world"/);
+        expect(html).toMatch(/<h2[^>]*id="code-stuff"/);
+      });
+    });
+
+    describe('link CSS in HTML document', () => {
+      test('should include anchor styles and print URL rule in wrapped HTML', () => {
+        const html = converter.wrapInHtmlDocument('<p>Body</p>', {});
+
+        expect(html).toContain('a {');
+        expect(html).toContain('color: #0366d6');
+        expect(html).toContain('text-decoration: underline');
+        expect(html).toContain('@media print');
+        expect(html).toContain('a[href^="http"]::after');
+        expect(html).toContain('attr(href)');
+      });
+    });
+
+    describe('tagged PDF option', () => {
+      test('should pass tagged: true to page.pdf when generating PDF', async () => {
+        const outputDir = path.join(__dirname, '..', 'tmp');
+        const outputPath = path.join(outputDir, 'tagged-pdf-test.pdf');
+        await fs.ensureDir(outputDir);
+
+        let pdfOptionsCaptured = null;
+        const puppeteer = require('puppeteer');
+        const originalLaunch = puppeteer.launch;
+        puppeteer.launch = jest.fn().mockImplementation(() => {
+          const mockPage = {
+            setContent: () => Promise.resolve(),
+            waitForFunction: () => Promise.resolve(),
+            evaluate: () => Promise.resolve({ total: 0, rendered: 0, failed: 0 }),
+            pdf: (opts) => {
+              pdfOptionsCaptured = opts;
+              return Promise.resolve(Buffer.alloc(0));
+            },
+            close: () => Promise.resolve()
+          };
+          return Promise.resolve({
+            newPage: () => Promise.resolve(mockPage),
+            close: () => Promise.resolve()
+          });
+        });
+
+        try {
+          const minimalHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Test</title></head><body><p>Test</p></body></html>';
+          await converter.generatePdf(minimalHtml, outputPath, {});
+          expect(pdfOptionsCaptured).not.toBeNull();
+          expect(pdfOptionsCaptured.tagged).toBe(true);
+        } finally {
+          puppeteer.launch = originalLaunch;
+          await fs.remove(outputDir).catch(() => {});
+        }
+      });
+    });
+
+    describe('annotation preservation in metadata embedding', () => {
+      test('should not throw when embedding metadata into PDF with pages', async () => {
+        const pdfDoc = await PDFDocument.create();
+        pdfDoc.addPage();
+        const pdfBytes = await pdfDoc.save();
+        const tmpDir = path.join(__dirname, '..', 'tmp');
+        const tmpPath = path.join(tmpDir, 'annot-test.pdf');
+        await fs.ensureDir(tmpDir);
+        await fs.writeFile(tmpPath, pdfBytes);
+
+        await expect(
+          converter.embedPdfMetadata(tmpPath, { title: 'Test', author: 'Author' })
+        ).resolves.not.toThrow();
+
+        const loaded = await PDFDocument.load(await fs.readFile(tmpPath));
+        expect(loaded.getPages()).toHaveLength(1);
+        await fs.remove(tmpDir).catch(() => {});
+      });
+    });
+  });
 });

@@ -3,8 +3,38 @@ const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer');
 const matter = require('gray-matter');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, PDFName } = require('pdf-lib');
 const { setupLogger } = require('./logger');
+
+function createHeadingSlugger() {
+  const seen = new Map();
+  return {
+    slug(raw) {
+      const base = String(raw)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\p{L}\p{N}-]/gu, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'section';
+      const count = seen.get(base) ?? 0;
+      seen.set(base, count + 1);
+      return count === 0 ? base : `${base}-${count}`;
+    },
+    reset() {
+      seen.clear();
+    }
+  };
+}
+const headingSlugger = createHeadingSlugger();
+marked.use({
+  renderer: {
+    heading(text, level, raw) {
+      const id = headingSlugger.slug(raw);
+      return `<h${level} id="${id}">${text}</h${level}>\n`;
+    }
+  }
+});
 
 class MarkdownConverter {
   constructor(options = {}) {
@@ -196,6 +226,7 @@ class MarkdownConverter {
       this.logger.debug('Replaced Mermaid diagram with placeholder', { filename: this.currentFilename, index: i, type: diagram.type });
     }
 
+    headingSlugger.reset();
     const htmlContent = marked(processedContent);
     this.logger.debug('Markdown converted to HTML', { filename: this.currentFilename });
 
@@ -378,6 +409,20 @@ class MarkdownConverter {
           border: none;
           border-top: 1px solid #eee;
           margin: 2em 0;
+        }
+
+        a {
+          color: #0366d6;
+          text-decoration: underline;
+        }
+
+        @media print {
+          a[href^="http"]::after {
+            content: " (" attr(href) ")";
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all;
+          }
         }
 
         .front-matter-header {
@@ -669,7 +714,8 @@ class MarkdownConverter {
           left: '1in'
         },
         printBackground: true,
-        displayHeaderFooter: false
+        displayHeaderFooter: false,
+        tagged: true
       };
 
       this.logger.debug('Generating PDF with options', { filename: this.currentFilename, ...pdfOptions });
@@ -719,6 +765,8 @@ class MarkdownConverter {
     try {
       const pdfBytes = await fs.readFile(outputPath);
       const pdfDoc = await PDFDocument.load(pdfBytes);
+      const pages = pdfDoc.getPages();
+      const savedAnnotations = pages.map((p) => p.node.Annots());
 
       if (frontMatter.title) {
         pdfDoc.setTitle(String(frontMatter.title));
@@ -745,6 +793,12 @@ class MarkdownConverter {
         }
       }
       pdfDoc.setCreator('markdown-mermaidjs-to-pdf');
+
+      pages.forEach((page, i) => {
+        if (savedAnnotations[i]) {
+          page.node.set(PDFName.Annots, savedAnnotations[i]);
+        }
+      });
 
       const modifiedPdfBytes = await pdfDoc.save();
       await fs.writeFile(outputPath, modifiedPdfBytes);
