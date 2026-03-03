@@ -1,0 +1,13 @@
+node_modules
+.git
+.github
+.husky
+.act*
+.env*
+data
+samples
+tests
+coverage
+logs
+*.md
+!package.json

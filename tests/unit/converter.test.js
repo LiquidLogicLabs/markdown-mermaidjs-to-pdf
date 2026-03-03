@@ -416,7 +416,7 @@ Some content.
         await fs.ensureDir(outputDir);
 
         let pdfOptionsCaptured = null;
-        const puppeteer = require('puppeteer');
+        const puppeteer = require('puppeteer-core');
         const originalLaunch = puppeteer.launch;
         puppeteer.launch = jest.fn().mockImplementation(() => {
           const mockPage = {

@@ -1,10 +1,38 @@
 const fs = require('fs-extra');
 const path = require('path');
 const { marked } = require('marked');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 const matter = require('gray-matter');
 const { PDFDocument, PDFName } = require('pdf-lib');
 const { setupLogger } = require('./logger');
+
+function findChromiumExecutable() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  const fs = require('fs');
+  const candidates = [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    'Could not find a Chrome/Chromium executable. ' +
+    'Install Chrome/Chromium or set the PUPPETEER_EXECUTABLE_PATH environment variable.'
+  );
+}
 
 function createHeadingSlugger() {
   const seen = new Map();
@@ -41,7 +69,6 @@ class MarkdownConverter {
     this.logger = setupLogger();
     this.browser = null;
     this.page = null;
-    this.mermaid = null;
     this.currentFilename = null;
     this.frontMatterMode = options.frontMatterMode || 'none';
 
@@ -62,48 +89,6 @@ class MarkdownConverter {
     return `${minutes}m ${seconds}s`;
   }
 
-  async initializeMermaid() {
-    if (!this.mermaid) {
-      this.mermaid = await import('mermaid');
-
-      // Set up JSDOM for Node.js environment with SVG support
-      const { JSDOM } = await import('jsdom');
-      const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-        url: 'http://localhost',
-        pretendToBeVisual: true,
-        resources: 'usable'
-      });
-
-      global.document = dom.window.document;
-      global.window = dom.window;
-      global.navigator = dom.window.navigator;
-
-      // Mock DOMPurify to prevent sanitization errors
-      global.DOMPurify = {
-        sanitize: (html) => html
-      };
-
-      // Mock SVG getBBox function
-      const originalCreateElement = dom.window.document.createElement;
-      dom.window.document.createElement = function(tagName) {
-        const element = originalCreateElement.call(this, tagName);
-        if (tagName.toLowerCase() === 'svg' || tagName.toLowerCase() === 'text') {
-          element.getBBox = function() {
-            return { x: 0, y: 0, width: 100, height: 20 };
-          };
-        }
-        return element;
-      };
-
-      this.mermaid.default.initialize({
-        startOnLoad: false,
-        theme: 'default',
-        securityLevel: 'loose',
-        fontFamily: 'Arial, sans-serif'
-      });
-    }
-  }
-
   async convertToPdf(inputPath, outputPath) {
     const conversionStartTime = Date.now();
     // Extract filename for logging context
@@ -118,9 +103,6 @@ class MarkdownConverter {
     };
 
     try {
-      // Initialize Mermaid
-      await this.initializeMermaid();
-
       // Read markdown file
       const readStartTime = Date.now();
       const markdownContent = await this.readMarkdownFile(inputPath);
@@ -277,30 +259,6 @@ class MarkdownConverter {
     if (firstLine.includes('sankey')) {return 'sankey';}
 
     return 'unknown';
-  }
-
-  async renderMermaidDiagram(code) {
-    this.logger.debug('Rendering Mermaid diagram', { codeLength: code.length });
-
-    try {
-      // Use a simpler approach that works better in Node.js
-      const { render } = this.mermaid.default;
-      const result = await render(`mermaid-${Date.now()}`, code);
-      this.logger.debug('Mermaid diagram rendered successfully');
-      return result.svg;
-    } catch (error) {
-      this.logger.error('Failed to render Mermaid diagram', {
-        error: error.message,
-        code: code.substring(0, 100) + '...'
-      });
-
-      // Return error placeholder
-      return `<div style="border: 2px solid red; padding: 10px; color: red;">
-        <strong>Mermaid Diagram Error:</strong><br>
-        ${error.message}<br>
-        <pre style="font-size: 10px; overflow: auto;">${code}</pre>
-      </div>`;
-    }
   }
 
   wrapInHtmlDocument(htmlContent, frontMatter = {}) {
@@ -570,6 +528,7 @@ class MarkdownConverter {
       // Launch browser
       const browserStartTime = Date.now();
       this.browser = await puppeteer.launch({
+        executablePath: findChromiumExecutable(),
         headless: 'new',
         args: [
           '--no-sandbox',

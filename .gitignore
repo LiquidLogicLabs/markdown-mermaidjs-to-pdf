@@ -14,9 +14,6 @@ test-results.log
 *~
 *.bak
 
-# Docker build artifacts
-.dockerignore
-
 # IDE files
 .vscode/
 .idea/
