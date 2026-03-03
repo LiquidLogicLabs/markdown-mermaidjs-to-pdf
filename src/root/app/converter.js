@@ -412,6 +412,11 @@ class MarkdownConverter {
         }
 
         a {
+          color: inherit;
+          text-decoration: none;
+        }
+        a[href^="#"],
+        a[href^="http"] {
           color: #0366d6;
           text-decoration: underline;
         }

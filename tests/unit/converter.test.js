@@ -397,6 +397,10 @@ Some content.
         const html = converter.wrapInHtmlDocument('<p>Body</p>', {});
 
         expect(html).toContain('a {');
+        expect(html).toContain('color: inherit');
+        expect(html).toContain('text-decoration: none');
+        expect(html).toContain('a[href^="#"]');
+        expect(html).toContain('a[href^="http"]');
         expect(html).toContain('color: #0366d6');
         expect(html).toContain('text-decoration: underline');
         expect(html).toContain('@media print');
