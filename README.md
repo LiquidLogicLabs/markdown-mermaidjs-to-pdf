@@ -100,6 +100,8 @@ markdown-mermaidjs-to-pdf -i ./docs -o ./pdfs --no-logging
 
 ### Docker (run)
 
+The image runs the converter by default; you only pass volume mounts and any CLI options after the image name.
+
 ```bash
 # Convert all markdown files in ./data/input to ./data/output
 docker run --rm \
@@ -120,12 +122,18 @@ docker run --rm \
   -e FRONT_MATTER_MODE=styled \
   ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
 
-# Enable verbose logging
+# Enable verbose logging (env var)
 docker run --rm \
   -v $(pwd)/data/input:/data/input \
   -v $(pwd)/data/output:/data/output \
   -e LOG_LEVEL=debug \
   ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest
+
+# Pass CLI options after the image name (e.g. verbose, custom dirs, front matter)
+docker run --rm \
+  -v $(pwd)/docs:/data/input \
+  -v $(pwd)/pdfs:/data/output \
+  ghcr.io/liquidlogiclabs/markdown-mermaidjs-to-pdf:latest -v --front-matter styled
 ```
 
 ### CLI Options
