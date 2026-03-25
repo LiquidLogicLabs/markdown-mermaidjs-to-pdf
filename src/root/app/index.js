@@ -200,9 +200,13 @@ async function main() {
       });
     }
 
-    // Exit with error code if any conversions failed
-    if (errorCount > 0) {
+    // Exit with appropriate error code
+    if (errorCount > 0 && successCount === 0) {
+      // All conversions failed
       process.exit(1);
+    } else if (errorCount > 0) {
+      // Partial success — some conversions failed
+      process.exit(2);
     }
 
   } catch (error) {

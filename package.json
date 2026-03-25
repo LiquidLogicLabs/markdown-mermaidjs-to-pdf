@@ -29,6 +29,7 @@
     "start": "node src/root/app/index.js",
     "dev": "nodemon src/root/app/index.js",
     "test": "jest",
+    "test:docker": "bash scripts/docker-test.sh",
     "build": "npm run test:e2e",
     "lint": "eslint src/",
     "format": "prettier --write src/",

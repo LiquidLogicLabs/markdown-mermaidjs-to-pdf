@@ -1,0 +1,9 @@
+node_modules
+.git
+.github
+.husky
+.act*
+.env*
+data
+coverage
+logs

@@ -497,11 +497,14 @@ Some content.
         let pdfOptionsCaptured = null;
         const puppeteer = require('puppeteer-core');
         const originalLaunch = puppeteer.launch;
+        const originalExecPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        process.env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/true';
         puppeteer.launch = jest.fn().mockImplementation(() => {
           const mockPage = {
             setContent: () => Promise.resolve(),
             waitForFunction: () => Promise.resolve(),
             evaluate: () => Promise.resolve({ total: 0, rendered: 0, failed: 0 }),
+            addScriptTag: () => Promise.resolve(),
             pdf: (opts) => {
               pdfOptionsCaptured = opts;
               return Promise.resolve(Buffer.alloc(0));
@@ -515,12 +518,14 @@ Some content.
         });
 
         try {
+          await converter.initializeBrowser();
           const minimalHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Test</title></head><body><p>Test</p></body></html>';
           await converter.generatePdf(minimalHtml, outputPath, {});
           expect(pdfOptionsCaptured).not.toBeNull();
           expect(pdfOptionsCaptured.tagged).toBe(true);
         } finally {
           puppeteer.launch = originalLaunch;
+          if (originalExecPath) { process.env.PUPPETEER_EXECUTABLE_PATH = originalExecPath; } else { delete process.env.PUPPETEER_EXECUTABLE_PATH; }
           await fs.remove(outputDir).catch(() => {});
         }
       });
@@ -544,6 +549,221 @@ Some content.
         expect(loaded.getPages()).toHaveLength(1);
         await fs.remove(tmpDir).catch(() => {});
       });
+    });
+  });
+
+  describe('Mermaid diagram count from processMarkdown', () => {
+    test('should return mermaidDiagramCount of 0 when no diagrams', async () => {
+      const markdownContent = `# No Diagrams\n\nJust text.`;
+      const result = await converter.processMarkdown(markdownContent);
+      expect(result.mermaidDiagramCount).toBe(0);
+    });
+
+    test('should return correct mermaidDiagramCount when diagrams exist', async () => {
+      const markdownContent = `# With Diagrams
+
+\`\`\`mermaid
+graph TD
+  A --> B
+\`\`\`
+
+Some text.
+
+\`\`\`mermaid
+sequenceDiagram
+  Alice->>Bob: Hello
+\`\`\``;
+
+      const result = await converter.processMarkdown(markdownContent);
+      expect(result.mermaidDiagramCount).toBe(2);
+    });
+  });
+
+  describe('HTML template Mermaid script removal', () => {
+    test('should not include CDN mermaid script in HTML output', async () => {
+      const markdownContent = `# Test\n\nSome content.`;
+      const { html } = await converter.processMarkdown(markdownContent);
+      expect(html).not.toContain('cdn.jsdelivr.net/npm/mermaid');
+      expect(html).not.toContain('mermaid.initialize');
+      expect(html).not.toContain('DOMContentLoaded');
+    });
+
+    test('should not include mermaid script even with diagrams', async () => {
+      const markdownContent = `# Test
+
+\`\`\`mermaid
+graph TD
+  A --> B
+\`\`\``;
+
+      const { html } = await converter.processMarkdown(markdownContent);
+      expect(html).not.toContain('cdn.jsdelivr.net/npm/mermaid');
+    });
+  });
+
+  describe('getMermaidCdnUrl', () => {
+    test('should return CDN URL with default version', () => {
+      const url = converter.getMermaidCdnUrl();
+      expect(url).toContain('cdn.jsdelivr.net/npm/mermaid@10.6.1');
+    });
+
+    test('should respect MERMAID_VERSION environment variable', () => {
+      process.env.MERMAID_VERSION = '11.0.0';
+      try {
+        const url = converter.getMermaidCdnUrl();
+        expect(url).toContain('mermaid@11.0.0');
+      } finally {
+        delete process.env.MERMAID_VERSION;
+      }
+    });
+  });
+
+  describe('getMermaidLocalPath', () => {
+    test('should return null when no local file exists and no env override', () => {
+      // When the bundled vendor file exists (e.g., in Docker), it returns that path.
+      // When no local file exists, it returns null.
+      const localPath = converter.getMermaidLocalPath();
+      if (localPath) {
+        expect(require('fs').existsSync(localPath)).toBe(true);
+      } else {
+        expect(localPath).toBeNull();
+      }
+    });
+
+    test('should respect MERMAID_JS_PATH environment variable', () => {
+      const tmpDir = path.join(__dirname, '..', 'tmp');
+      const tmpPath = path.join(tmpDir, 'mermaid-test.js');
+      fs.ensureDirSync(tmpDir);
+      fs.writeFileSync(tmpPath, '// fake mermaid');
+
+      process.env.MERMAID_JS_PATH = tmpPath;
+      try {
+        const localPath = converter.getMermaidLocalPath();
+        expect(localPath).toBe(tmpPath);
+      } finally {
+        delete process.env.MERMAID_JS_PATH;
+        fs.removeSync(tmpDir);
+      }
+    });
+  });
+
+  describe('generatePdf Mermaid conditional loading', () => {
+    let mockPage;
+    let puppeteerModule;
+    let originalLaunch;
+    let originalExecPath;
+
+    beforeEach(() => {
+      originalExecPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+      process.env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/true';
+      mockPage = {
+        setContent: jest.fn().mockResolvedValue(undefined),
+        waitForFunction: jest.fn().mockResolvedValue(undefined),
+        evaluate: jest.fn().mockResolvedValue({ total: 0, rendered: 0, failed: 0 }),
+        addScriptTag: jest.fn().mockResolvedValue(undefined),
+        pdf: jest.fn().mockResolvedValue(Buffer.alloc(0)),
+        close: jest.fn().mockResolvedValue(undefined)
+      };
+
+      puppeteerModule = require('puppeteer-core');
+      originalLaunch = puppeteerModule.launch;
+      puppeteerModule.launch = jest.fn().mockResolvedValue({
+        newPage: () => Promise.resolve(mockPage),
+        close: () => Promise.resolve()
+      });
+    });
+
+    afterEach(async () => {
+      puppeteerModule.launch = originalLaunch;
+      if (originalExecPath) { process.env.PUPPETEER_EXECUTABLE_PATH = originalExecPath; } else { delete process.env.PUPPETEER_EXECUTABLE_PATH; }
+    });
+
+    test('should skip mermaid loading when mermaidDiagramCount is 0', async () => {
+      const outputDir = path.join(__dirname, '..', 'tmp');
+      const outputPath = path.join(outputDir, 'no-mermaid.pdf');
+      await fs.ensureDir(outputDir);
+
+      try {
+        await converter.initializeBrowser();
+        const html = '<!DOCTYPE html><html><head></head><body><p>Test</p></body></html>';
+        await converter.generatePdf(html, outputPath, {}, 0);
+
+        expect(mockPage.addScriptTag).not.toHaveBeenCalled();
+        expect(mockPage.pdf).toHaveBeenCalled();
+      } finally {
+        await fs.remove(outputDir).catch(() => {});
+      }
+    });
+
+    test('should load mermaid when mermaidDiagramCount > 0', async () => {
+      const outputDir = path.join(__dirname, '..', 'tmp');
+      const outputPath = path.join(outputDir, 'with-mermaid.pdf');
+      await fs.ensureDir(outputDir);
+
+      try {
+        await converter.initializeBrowser();
+        const html = '<!DOCTYPE html><html><head></head><body><div class="mermaid-diagram" data-mermaid="graph%20TD%0A%20%20A%20--%3E%20B"><div class="mermaid-placeholder">Rendering...</div></div></body></html>';
+        await converter.generatePdf(html, outputPath, {}, 1);
+
+        expect(mockPage.addScriptTag).toHaveBeenCalled();
+        expect(mockPage.waitForFunction).toHaveBeenCalled();
+        expect(mockPage.evaluate).toHaveBeenCalled();
+        expect(mockPage.pdf).toHaveBeenCalled();
+      } finally {
+        await fs.remove(outputDir).catch(() => {});
+      }
+    });
+
+    test('should fall back to local file when CDN addScriptTag fails', async () => {
+      const outputDir = path.join(__dirname, '..', 'tmp');
+      const outputPath = path.join(outputDir, 'fallback-mermaid.pdf');
+      const fakeMermaidPath = path.join(outputDir, 'mermaid.min.js');
+      await fs.ensureDir(outputDir);
+      await fs.writeFile(fakeMermaidPath, '// fake mermaid');
+
+      process.env.MERMAID_JS_PATH = fakeMermaidPath;
+
+      let addScriptCallCount = 0;
+      mockPage.addScriptTag = jest.fn().mockImplementation((opts) => {
+        addScriptCallCount++;
+        if (opts.url) {
+          // CDN call fails
+          return Promise.reject(new Error('net::ERR_CONNECTION_REFUSED'));
+        }
+        // Local file call succeeds
+        return Promise.resolve();
+      });
+
+      try {
+        await converter.initializeBrowser();
+        const html = '<!DOCTYPE html><html><head></head><body><div class="mermaid-diagram" data-mermaid="graph%20TD%0A%20%20A%20--%3E%20B"><div class="mermaid-placeholder">Rendering...</div></div></body></html>';
+        await converter.generatePdf(html, outputPath, {}, 1);
+
+        expect(addScriptCallCount).toBe(2);
+        expect(mockPage.addScriptTag).toHaveBeenCalledWith(expect.objectContaining({ url: expect.any(String) }));
+        expect(mockPage.addScriptTag).toHaveBeenCalledWith(expect.objectContaining({ path: fakeMermaidPath }));
+        expect(mockPage.pdf).toHaveBeenCalled();
+      } finally {
+        delete process.env.MERMAID_JS_PATH;
+        await fs.remove(outputDir).catch(() => {});
+      }
+    });
+
+    test('should default mermaidDiagramCount to 0 when not provided', async () => {
+      const outputDir = path.join(__dirname, '..', 'tmp');
+      const outputPath = path.join(outputDir, 'default-count.pdf');
+      await fs.ensureDir(outputDir);
+
+      try {
+        await converter.initializeBrowser();
+        const html = '<!DOCTYPE html><html><head></head><body><p>Test</p></body></html>';
+        await converter.generatePdf(html, outputPath, {});
+
+        expect(mockPage.addScriptTag).not.toHaveBeenCalled();
+        expect(mockPage.pdf).toHaveBeenCalled();
+      } finally {
+        await fs.remove(outputDir).catch(() => {});
+      }
     });
   });
 });

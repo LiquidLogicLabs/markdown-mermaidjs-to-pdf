@@ -1,0 +1,37 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+COPY package*.json ./
+
+# Install ALL dependencies (including devDependencies for testing)
+RUN npm ci --ignore-scripts && npm cache clean --force
+
+COPY src/ ./src/
+COPY tests/ ./tests/
+COPY samples/ ./samples/
+COPY jest.config.js ./
+
+# Bundle Mermaid.js locally
+RUN mkdir -p vendor && \
+    wget -q -O vendor/mermaid.min.js "https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"
+
+RUN mkdir -p logs /data/input /data/output /tmp/test-output && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app /data /tmp/test-output
+
+USER nodejs
+
+# Default: run unit tests
+CMD ["node", "node_modules/jest/bin/jest.js", "--verbose"]

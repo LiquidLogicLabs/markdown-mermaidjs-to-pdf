@@ -1,66 +1,79 @@
 #!/bin/bash
 
 # Docker Container Test Script
-# This script runs the complete test suite inside the Docker container
+# Builds a test image and runs unit tests + E2E conversion tests inside Docker
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+IMAGE_NAME="md2pdf-test"
 
 echo "======================================"
 echo "Docker Container Test Suite"
 echo "======================================"
 echo ""
-echo "Environment:"
-echo "  Node.js: $(node --version)"
-echo "  npm: $(npm --version)"
-echo "  Working Directory: $(pwd)"
+
+# Determine container runtime
+if command -v docker &> /dev/null; then
+    RUNTIME="docker"
+elif command -v podman &> /dev/null; then
+    RUNTIME="podman"
+else
+    echo "Error: Neither docker nor podman found"
+    exit 1
+fi
+echo "Container runtime: $RUNTIME"
 echo ""
 
-echo "Step 1: Installing Dependencies"
+echo "Step 1: Building Test Image"
 echo "================================"
-npm ci --omit=dev
-echo "✓ Production dependencies installed"
+$RUNTIME build -t "$IMAGE_NAME" -f "$PROJECT_ROOT/docker/Dockerfile.test" --ignorefile "$PROJECT_ROOT/docker/Dockerfile.test.dockerignore" "$PROJECT_ROOT"
+echo "✓ Test image built"
 echo ""
 
-echo "Step 2: Building Application"
-echo "============================"
-npm run build
-echo "✓ Build completed"
-echo ""
-
-echo "Step 3: Installing Dev Dependencies"
-echo "===================================="
-npm ci
-echo "✓ All dependencies installed"
-echo ""
-
-echo "Step 4: Running Linting"
-echo "======================"
-npm run lint
-echo "✓ Linting passed"
-echo ""
-
-echo "Step 5: Running Unit Tests"
+echo "Step 2: Running Unit Tests"
 echo "=========================="
-npm test -- --coverage
+$RUNTIME run --rm "$IMAGE_NAME"
+echo "✓ Unit tests passed"
 echo ""
 
-echo "Step 6: Testing Converter with Sample Files"
-echo "==========================================="
-mkdir -p /tmp/test-input /tmp/test-output
-cp samples/*.md /tmp/test-input/
-node src/root/app/index.js -i /tmp/test-input -o /tmp/test-output
+echo "Step 3: Running E2E Conversion Tests"
+echo "====================================="
+$RUNTIME run --rm \
+    --entrypoint sh "$IMAGE_NAME" \
+    -c '
+set -e
+echo "--- E2E: Converting sample files ---"
+mkdir -p /tmp/test-output
+node src/root/app/index.js -i samples -o /tmp/test-output -v --front-matter styled
+
 PDF_COUNT=$(ls -1 /tmp/test-output/*.pdf 2>/dev/null | wc -l)
-echo "✓ Generated $PDF_COUNT PDFs from sample files"
-echo ""
+MD_COUNT=$(ls -1 samples/*.md 2>/dev/null | wc -l)
 
-echo "Step 7: Verifying PDF Output"
-echo "============================"
+echo ""
+echo "--- E2E: Verifying PDF output ---"
 for pdf in /tmp/test-output/*.pdf; do
     if [ -f "$pdf" ]; then
-        SIZE=$(stat -c%s "$pdf")
-        echo "  ✓ $(basename $pdf): $SIZE bytes"
+        SIZE=$(stat -c%s "$pdf" 2>/dev/null || stat -f%z "$pdf" 2>/dev/null)
+        if [ "$SIZE" -gt 0 ]; then
+            echo "  ✓ $(basename "$pdf"): ${SIZE} bytes"
+        else
+            echo "  ✗ $(basename "$pdf"): empty file!"
+            exit 1
+        fi
     fi
 done
+
+echo ""
+if [ "$PDF_COUNT" -eq "$MD_COUNT" ]; then
+    echo "✓ All $PDF_COUNT/$MD_COUNT sample files converted successfully"
+else
+    echo "✗ Only $PDF_COUNT/$MD_COUNT files converted"
+    exit 1
+fi
+'
+echo "✓ E2E tests passed"
 echo ""
 
 echo "======================================"

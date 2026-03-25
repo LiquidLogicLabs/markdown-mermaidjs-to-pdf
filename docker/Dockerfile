@@ -18,6 +18,10 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY src/ ./src/
 
+# Bundle Mermaid.js locally to avoid CDN dependency at runtime
+RUN mkdir -p vendor && \
+    wget -q -O vendor/mermaid.min.js "https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"
+
 RUN mkdir -p logs /data/input /data/output /data/logs && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \

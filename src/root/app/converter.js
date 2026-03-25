@@ -2,7 +2,55 @@ const fs = require('fs-extra');
 const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer-core');
-const matter = require('gray-matter');
+let matter;
+try {
+  matter = require('gray-matter');
+} catch (_err) {
+  // Minimal fallback parser for environments where gray-matter isn't installed.
+  // Supports simple YAML front matter of the form:
+  // ---
+  // key: value
+  // ---
+  matter = function basicMatter(markdownContent) {
+    if (typeof markdownContent !== 'string') {
+      return { data: {}, content: '' };
+    }
+
+    const lines = markdownContent.split(/\r?\n/);
+    if (lines.length < 3 || lines[0].trim() !== '---') {
+      return { data: {}, content: markdownContent };
+    }
+
+    let endIndex = -1;
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === '---') {
+        endIndex = i;
+        break;
+      }
+    }
+
+    if (endIndex === -1) {
+      return { data: {}, content: markdownContent };
+    }
+
+    const yamlLines = lines.slice(1, endIndex);
+    const data = {};
+    for (const line of yamlLines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) { continue; }
+
+      const colonIndex = trimmed.indexOf(':');
+      if (colonIndex === -1) { continue; }
+
+      const key = trimmed.slice(0, colonIndex).trim();
+      const value = trimmed.slice(colonIndex + 1).trim();
+      if (key) { data[key] = value; }
+    }
+
+    const content = lines.slice(endIndex + 1).join('\n');
+    return { data, content };
+  };
+}
 const { PDFDocument, PDFName } = require('pdf-lib');
 const { setupLogger } = require('./logger');
 
@@ -97,8 +145,11 @@ class MarkdownConverter {
   async initializeBrowser() {
     if (!this.browser) {
       this.logger.debug('Initializing browser');
+      const executablePath = findChromiumExecutable();
+      this.logger.debug('Using Chromium executable', { executablePath });
       this.browser = await puppeteer.launch({
         headless: 'new',
+        executablePath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -150,19 +201,20 @@ class MarkdownConverter {
 
       // Process markdown and render Mermaid diagrams
       const processStartTime = Date.now();
-      const { html: htmlContent, frontMatter } = await this.processMarkdown(markdownContent);
+      const { html: htmlContent, frontMatter, mermaidDiagramCount } = await this.processMarkdown(markdownContent);
       timing.processMarkdown = Date.now() - processStartTime;
       this.logger.debug('Markdown processed to HTML', {
         filename: this.currentFilename,
         htmlSize: htmlContent.length,
         hasFrontMatter: Object.keys(frontMatter).length > 0,
+        mermaidDiagramCount,
         duration: timing.processMarkdown,
         durationFormatted: this.formatDuration(timing.processMarkdown)
       });
 
       // Generate PDF
       const pdfStartTime = Date.now();
-      await this.generatePdf(htmlContent, outputPath, frontMatter);
+      await this.generatePdf(htmlContent, outputPath, frontMatter, mermaidDiagramCount);
       timing.generatePdf = Date.now() - pdfStartTime;
       this.logger.debug('PDF generation completed', {
         filename: this.currentFilename,
@@ -287,7 +339,7 @@ class MarkdownConverter {
     const fullHtml = this.wrapInHtmlDocument(htmlContent, frontMatter);
     this.logger.debug('HTML wrapped in complete document', { filename: this.currentFilename });
 
-    return { html: fullHtml, frontMatter };
+    return { html: fullHtml, frontMatter, mermaidDiagramCount: mermaidDiagrams.length };
   }
 
   extractMermaidDiagrams(markdownContent) {
@@ -504,35 +556,7 @@ class MarkdownConverter {
       </style>
     `;
 
-    const mermaidScript = `
-      <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
-      <script>
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'default',
-          securityLevel: 'loose',
-          fontFamily: 'Arial, sans-serif'
-        });
-        
-        document.addEventListener('DOMContentLoaded', function() {
-          const diagrams = document.querySelectorAll('.mermaid-diagram');
-          diagrams.forEach(function(diagram) {
-            const code = decodeURIComponent(diagram.getAttribute('data-mermaid'));
-            const placeholder = diagram.querySelector('.mermaid-placeholder');
-            
-            try {
-              mermaid.render('mermaid-' + Date.now(), code).then(function(result) {
-                diagram.innerHTML = result.svg;
-              }).catch(function(error) {
-                diagram.innerHTML = '<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ' + error.message + '</div>';
-              });
-            } catch (error) {
-              diagram.innerHTML = '<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ' + error.message + '</div>';
-            }
-          });
-        });
-      </script>
-    `;
+
 
     const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const formatDate = (val) => {
@@ -574,7 +598,6 @@ class MarkdownConverter {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${documentTitle}</title>
     ${css}
-    ${mermaidScript}
 </head>
 <body>
     ${titleBlockHtml}
@@ -583,7 +606,84 @@ class MarkdownConverter {
 </html>`;
   }
 
-  async generatePdf(htmlContent, outputPath, frontMatter = {}) {
+  getMermaidCdnUrl() {
+    const mermaidVersion = process.env.MERMAID_VERSION || '10.6.1';
+    return `https://cdn.jsdelivr.net/npm/mermaid@${mermaidVersion}/dist/mermaid.min.js`;
+  }
+
+  getMermaidLocalPath() {
+    // 1. Check environment variable override
+    const envPath = process.env.MERMAID_JS_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+      return envPath;
+    }
+
+    // 2. Check common local paths (Docker image bundles mermaid here)
+    const localPaths = [
+      path.join(__dirname, '..', '..', '..', 'vendor', 'mermaid.min.js'),
+      '/app/vendor/mermaid.min.js'
+    ];
+
+    for (const localPath of localPaths) {
+      if (fs.existsSync(localPath)) {
+        return localPath;
+      }
+    }
+
+    return null;
+  }
+
+  async loadMermaidLibrary(page) {
+    const cdnUrl = this.getMermaidCdnUrl();
+    const localPath = this.getMermaidLocalPath();
+
+    // Try CDN first, then fall back to local bundle
+    const sources = [
+      { type: 'url', value: cdnUrl },
+      ...(localPath ? [{ type: 'path', value: localPath }] : [])
+    ];
+
+    let lastError;
+    for (const source of sources) {
+      try {
+        if (source.type === 'path') {
+          this.logger.debug('Loading Mermaid from local file', { path: source.value });
+          await page.addScriptTag({ path: source.value });
+        } else {
+          this.logger.debug('Loading Mermaid from CDN', { url: source.value });
+          await page.addScriptTag({ url: source.value });
+        }
+
+        // Verify mermaid loaded successfully
+        await page.waitForFunction(() => typeof window.mermaid !== 'undefined', { timeout: 5000 });
+
+        // Initialize mermaid
+        await page.evaluate(() => {
+          window.mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'Arial, sans-serif'
+          });
+        });
+
+        this.logger.debug('Mermaid loaded successfully', { source: source.type, value: source.value });
+        return; // Success
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`Mermaid loading from ${source.type} failed, ${sources.indexOf(source) < sources.length - 1 ? 'trying fallback' : 'no more sources'}`, {
+          filename: this.currentFilename,
+          error: error.message,
+          source: source.type,
+          value: source.value
+        });
+      }
+    }
+
+    throw new Error(`Failed to load Mermaid library from all sources: ${lastError.message}`);
+  }
+
+  async generatePdf(htmlContent, outputPath, frontMatter = {}, mermaidDiagramCount = 0) {
     const pdfStartTime = Date.now();
     this.logger.debug('Creating new page for PDF generation', { filename: this.currentFilename });
 
@@ -617,112 +717,116 @@ class MarkdownConverter {
         durationFormatted: this.formatDuration(pdfTiming.contentSet)
       });
 
-      // Wait for Mermaid library to load
-      const mermaidLoadStartTime = Date.now();
-      await this.page.waitForFunction(() => {
-        return typeof window.mermaid !== 'undefined';
-      }, { timeout: 10000 });
-      pdfTiming.mermaidLoad = Date.now() - mermaidLoadStartTime;
-      this.logger.debug('Mermaid library loaded', {
-        filename: this.currentFilename,
-        duration: pdfTiming.mermaidLoad,
-        durationFormatted: this.formatDuration(pdfTiming.mermaidLoad)
-      });
-
-      // Add debug output to the page for troubleshooting (only if debug is enabled)
-      const debugEnabled = process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === '1' || process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === 'true';
-      if (debugEnabled) {
-        await this.page.evaluate(() => {
-          if (!document.getElementById('mermaid-debug-info')) {
-            const debugDiv = document.createElement('div');
-            debugDiv.id = 'mermaid-debug-info';
-            debugDiv.style = 'position:fixed;top:0;left:0;right:0;background:#fffbe6;color:#333;padding:8px 12px;font-size:14px;z-index:9999;border-bottom:1px solid #eee;box-shadow:0 2px 4px #0001;';
-            debugDiv.innerText = 'Mermaid: Waiting for diagrams to render...';
-            document.body.prepend(debugDiv);
-          }
+      // Load and render Mermaid diagrams (only when diagrams are present)
+      if (mermaidDiagramCount > 0) {
+        const mermaidLoadStartTime = Date.now();
+        await this.loadMermaidLibrary(this.page);
+        pdfTiming.mermaidLoad = Date.now() - mermaidLoadStartTime;
+        this.logger.debug('Mermaid library loaded', {
+          filename: this.currentFilename,
+          duration: pdfTiming.mermaidLoad,
+          durationFormatted: this.formatDuration(pdfTiming.mermaidLoad)
         });
-      }
 
-      // Progressive Mermaid diagram rendering - render diagrams one by one
-      const diagramStartTime = Date.now();
-      const renderStatus = await this.page.evaluate(async (debugEnabled) => {
-        const diagrams = document.querySelectorAll('.mermaid-diagram');
-        const debugDiv = document.getElementById('mermaid-debug-info');
-
-        if (diagrams.length === 0) {
-          if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
-          return { total: 0, rendered: 0, failed: 0 };
-        }
-
-        let rendered = 0, failed = 0;
-
-        // Render each diagram individually
-        for (let i = 0; i < diagrams.length; i++) {
-          const diagram = diagrams[i];
-          const code = decodeURIComponent(diagram.getAttribute('data-mermaid'));
-
-          if (debugEnabled && debugDiv) {
-            debugDiv.innerText = `Mermaid: Rendering diagram ${i + 1}/${diagrams.length}...`;
-          }
-
-          try {
-            // Render the diagram
-            const result = await window.mermaid.render(`mermaid-${Date.now()}-${i}`, code);
-            diagram.innerHTML = result.svg;
-            rendered++;
-
-            if (debugEnabled && debugDiv) {
-              debugDiv.innerText = `Mermaid: ${i + 1}/${diagrams.length} diagrams rendered successfully...`;
+        // Add debug output to the page for troubleshooting (only if debug is enabled)
+        const debugEnabled = process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === '1' || process.env.MARKDOWN_MERMAIDJS_TO_PDF_DEBUG === 'true';
+        if (debugEnabled) {
+          await this.page.evaluate(() => {
+            if (!document.getElementById('mermaid-debug-info')) {
+              const debugDiv = document.createElement('div');
+              debugDiv.id = 'mermaid-debug-info';
+              debugDiv.style = 'position:fixed;top:0;left:0;right:0;background:#fffbe6;color:#333;padding:8px 12px;font-size:14px;z-index:9999;border-bottom:1px solid #eee;box-shadow:0 2px 4px #0001;';
+              debugDiv.innerText = 'Mermaid: Waiting for diagrams to render...';
+              document.body.prepend(debugDiv);
             }
-          } catch (error) {
-            // Show error for this diagram
-            diagram.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ${error.message}</div>`;
-            failed++;
-
-            if (debugEnabled && debugDiv) {
-              debugDiv.innerText = `Mermaid: Diagram ${i + 1} failed, continuing...`;
-            }
-          }
-
-          // Small delay to prevent overwhelming the browser
-          await new Promise(resolve => setTimeout(resolve, 100));
+          });
         }
 
-        if (debugEnabled && debugDiv) {
-          debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams processed (${rendered} rendered, ${failed} failed).`;
-        }
-
-        return { total: diagrams.length, rendered, failed };
-      }, debugEnabled);
-
-      this.logger.info('Progressive Mermaid rendering completed', {
-        filename: this.currentFilename,
-        totalDiagrams: renderStatus.total,
-        renderedDiagrams: renderStatus.rendered,
-        failedDiagrams: renderStatus.failed
-      });
-
-      // Update debug output to show final status (only if debug is enabled)
-      if (debugEnabled) {
-        await this.page.evaluate(() => {
+        // Progressive Mermaid diagram rendering - render diagrams one by one
+        const diagramStartTime = Date.now();
+        const renderStatus = await this.page.evaluate(async (debugEnabled) => {
           const diagrams = document.querySelectorAll('.mermaid-diagram');
           const debugDiv = document.getElementById('mermaid-debug-info');
+
+          if (diagrams.length === 0) {
+            if (debugEnabled && debugDiv) {debugDiv.innerText = 'Mermaid: No diagrams found.';}
+            return { total: 0, rendered: 0, failed: 0 };
+          }
+
           let rendered = 0, failed = 0;
-          diagrams.forEach(diagram => {
-            const svg = diagram.querySelector('svg');
-            const error = diagram.querySelector('div[style*="color: red"]');
-            if (svg) {rendered++;}
-            if (error) {failed++;}
-          });
-          if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;}
+
+          // Render each diagram individually
+          for (let i = 0; i < diagrams.length; i++) {
+            const diagram = diagrams[i];
+            const code = decodeURIComponent(diagram.getAttribute('data-mermaid'));
+
+            if (debugEnabled && debugDiv) {
+              debugDiv.innerText = `Mermaid: Rendering diagram ${i + 1}/${diagrams.length}...`;
+            }
+
+            try {
+              // Render the diagram
+              const result = await window.mermaid.render(`mermaid-${Date.now()}-${i}`, code);
+              diagram.innerHTML = result.svg;
+              rendered++;
+
+              if (debugEnabled && debugDiv) {
+                debugDiv.innerText = `Mermaid: ${i + 1}/${diagrams.length} diagrams rendered successfully...`;
+              }
+            } catch (error) {
+              // Show error for this diagram
+              diagram.innerHTML = `<div style="color: red; border: 1px solid red; padding: 10px;">Mermaid Diagram Error: ${error.message}</div>`;
+              failed++;
+
+              if (debugEnabled && debugDiv) {
+                debugDiv.innerText = `Mermaid: Diagram ${i + 1} failed, continuing...`;
+              }
+            }
+
+            // Small delay to prevent overwhelming the browser
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          if (debugEnabled && debugDiv) {
+            debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams processed (${rendered} rendered, ${failed} failed).`;
+          }
+
+          return { total: diagrams.length, rendered, failed };
+        }, debugEnabled);
+
+        this.logger.info('Progressive Mermaid rendering completed', {
+          filename: this.currentFilename,
+          totalDiagrams: renderStatus.total,
+          renderedDiagrams: renderStatus.rendered,
+          failedDiagrams: renderStatus.failed
         });
+
+        // Update debug output to show final status (only if debug is enabled)
+        if (debugEnabled) {
+          await this.page.evaluate(() => {
+            const diagrams = document.querySelectorAll('.mermaid-diagram');
+            const debugDiv = document.getElementById('mermaid-debug-info');
+            let rendered = 0, failed = 0;
+            diagrams.forEach(diagram => {
+              const svg = diagram.querySelector('svg');
+              const error = diagram.querySelector('div[style*="color: red"]');
+              if (svg) {rendered++;}
+              if (error) {failed++;}
+            });
+            if (debugDiv) {debugDiv.innerText = `Mermaid: ${diagrams.length} diagrams, ${rendered} rendered, ${failed} failed.`;}
+          });
+        }
+        pdfTiming.diagramRender = Date.now() - diagramStartTime;
+        this.logger.debug('Mermaid diagrams rendered', {
+          filename: this.currentFilename,
+          duration: pdfTiming.diagramRender,
+          durationFormatted: this.formatDuration(pdfTiming.diagramRender)
+        });
+      } else {
+        this.logger.debug('No Mermaid diagrams found, skipping Mermaid loading', { filename: this.currentFilename });
+        pdfTiming.mermaidLoad = 0;
+        pdfTiming.diagramRender = 0;
       }
-      pdfTiming.diagramRender = Date.now() - diagramStartTime;
-      this.logger.debug('Mermaid diagrams rendered', {
-        filename: this.currentFilename,
-        duration: pdfTiming.diagramRender,
-        durationFormatted: this.formatDuration(pdfTiming.diagramRender)
-      });
 
       // Generate PDF with configurable options
       const pdfGenStartTime = Date.now();
