@@ -140,7 +140,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         if: env.IMAGE_PUSH_MODE == 'true'
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.32.0
         with:
           image-ref: ${{ env.REGISTRY_NAME }}/${{ env.REGISTRY_ORG }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           format: 'sarif'
