@@ -1,0 +1,18 @@
+[workflow]
+activation_steps_prepend = []
+activation_steps_append  = []
+persistent_facts         = ["file:{project-root}/**/project-context.md"]
+
+# Parallelism controls
+parallel_mode            = "adaptive"   # "adaptive" | "off"
+max_parallel_subagents   = 2            # default 2; hard cap enforced at 4
+
+# Deferred file cleanup: collect rm commands into a script and batch-execute at epic close
+# instead of running inline. Useful when the security sandbox requires explicit approval for rm.
+deferred_file_cleanup    = false        # true | false
+
+# Calibration sampling granularity for scope + fix learning (see references/metrics-contract.md).
+# "story"  — each done story emits a scope/fix sample; converges after ~3 stories (best for short projects)
+# "sprint" — scope/fix learned in aggregate per sprint; converges after ~3 sprints (fewer, coarser samples)
+# Closure calibration is always per-sprint / per-epic regardless (closure only happens at those levels).
+calibration_granularity  = "story"      # "story" | "sprint"

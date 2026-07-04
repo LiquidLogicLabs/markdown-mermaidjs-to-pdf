@@ -1,0 +1,23 @@
+code: l3io-sec
+name: "LiquidLogicLabs Security Red Team"
+description: "Adversarial security analysis for LiquidLogicLabs projects — five threat lenses with AI poisoning cross-cut and live cloud/platform best practices research."
+module_version: 1.0.13
+default_selected: false
+module_greeting: >
+  LiquidLogicLabs Security module is configured!
+  Use /l3io-sec-agent-redteam for red team analysis at sprint, epic, or solution scope.
+  The agent builds its research cache over time for faster platform best practices lookups.
+  Ensure WebSearch is enabled in Claude Code permissions for live platform research.
+
+agents:
+  - code: redteam
+    name: ""
+    title: "Red Team Agent"
+    icon: "🔴"
+    description: "Adversarial security analysis across five threat lenses with AI poisoning cross-cut and live cloud/platform best practices research."
+
+research_cache_ttl_days:
+  prompt: "How many days before platform best practices cache entries are refreshed?"
+  default: "30"
+  result: "{value}"
+  user_setting: true

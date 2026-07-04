@@ -1,0 +1,16 @@
+code: l3io-pm
+name: "LiquidLogicLabs PM Orchestration"
+description: "Sprint and epic execution orchestration for LiquidLogicLabs delivery teams — full lifecycle from story preparation through closure reviews."
+module_version: 1.0.13
+default_selected: false
+module_greeting: >
+  LiquidLogicLabs PM Orchestration module is configured!
+  Use /l3io-pm-sprint-execute to run a single sprint end-to-end with quality gates,
+  or /l3io-pm-epic-execute to run a full epic across multiple sprints with epic-level closure.
+  Both orchestrators delegate every phase to a fresh subagent — state passes through disk only.
+
+post-install-notes: >
+  Required BMad skills (must be installed in target repo):
+  bmad-create-story, bmad-dev-story, bmad-code-review,
+  bmad-qa-generate-e2e-tests, bmad-retrospective, bmad-review-adversarial-general.
+  Optional: l3io-sec-agent-redteam (red-team phases), bmad-ux-review (UX phases).
