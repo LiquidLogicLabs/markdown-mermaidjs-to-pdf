@@ -2,55 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { marked } = require('marked');
 const puppeteer = require('puppeteer-core');
-let matter;
-try {
-  matter = require('gray-matter');
-} catch (_err) {
-  // Minimal fallback parser for environments where gray-matter isn't installed.
-  // Supports simple YAML front matter of the form:
-  // ---
-  // key: value
-  // ---
-  matter = function basicMatter(markdownContent) {
-    if (typeof markdownContent !== 'string') {
-      return { data: {}, content: '' };
-    }
-
-    const lines = markdownContent.split(/\r?\n/);
-    if (lines.length < 3 || lines[0].trim() !== '---') {
-      return { data: {}, content: markdownContent };
-    }
-
-    let endIndex = -1;
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].trim() === '---') {
-        endIndex = i;
-        break;
-      }
-    }
-
-    if (endIndex === -1) {
-      return { data: {}, content: markdownContent };
-    }
-
-    const yamlLines = lines.slice(1, endIndex);
-    const data = {};
-    for (const line of yamlLines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) { continue; }
-
-      const colonIndex = trimmed.indexOf(':');
-      if (colonIndex === -1) { continue; }
-
-      const key = trimmed.slice(0, colonIndex).trim();
-      const value = trimmed.slice(colonIndex + 1).trim();
-      if (key) { data[key] = value; }
-    }
-
-    const content = lines.slice(endIndex + 1).join('\n');
-    return { data, content };
-  };
-}
+const matter = require('./frontmatter');
 const { PDFDocument, PDFName } = require('pdf-lib');
 const { setupLogger } = require('./logger');
 
