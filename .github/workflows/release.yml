@@ -284,7 +284,9 @@ jobs:
         with:
           tag-name: ${{ env.IMAGE_TAG_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          skip-certificate-check: true
+          # Only skip TLS verification for self-hosted (e.g. Gitea with a
+          # self-signed cert); always verify against github.com.
+          skip-certificate-check: ${{ github.server_url != 'https://github.com' }}
 
       - name: Build changelog
         id: changelog
